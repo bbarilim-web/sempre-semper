@@ -1,0 +1,20 @@
+{
+  "name": "sempre-semper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digitaler Spielplan — Staatsopernchor Dresden",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "firebase": "^11.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0"
+  }
+}
