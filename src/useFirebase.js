@@ -9,7 +9,7 @@ import {
   getDocs, writeBatch,
 } from "firebase/firestore";
 import {
-  signInWithPopup, signOut, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "firebase/auth";
 import { db, auth, provider } from "./firebase";
 
@@ -54,8 +54,7 @@ export function useAuth() {
 
   const loginWithGoogle = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
-      return result.user;
+      await signInWithRedirect(auth, provider);
     } catch (e) {
       console.error("Login error:", e);
       throw e;
