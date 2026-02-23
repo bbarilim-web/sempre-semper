@@ -8,7 +8,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2PpILD3yv7ibZab3Hvbk4rJJC_YglYGk",
-  authDomain: "sempre-semper-1e528.firebaseapp.com",
+  authDomain: "sempre-semper.vercel.app",
   projectId: "sempre-semper-1e528",
   storageBucket: "sempre-semper-1e528.firebasestorage.app",
   messagingSenderId: "920074308813",
