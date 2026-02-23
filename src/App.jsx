@@ -848,10 +848,10 @@ export default function App() {
         </header>
 
         <main style={{ flex: 1 }}>
-          {tab === "calendar"  && <CalView scheds={scheds} user={user} defaultView={settings.defaultView} />}
+          {tab === "calendar"  && <CalView scheds={scheds} user={user} defaultView={settings.defaultView} settings={settings} />}
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
-          {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} />}
+          {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
           {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} notifs={notifs} setNotifs={saveNotifs} toast={toast} />}
         </main>
 
@@ -1137,19 +1137,30 @@ function EvCard({ e, user, compact = false, changed = false }) {
 // ═══════════════════════════════════════════════════════════════════════
 //  CALENDAR VIEW  — 4 modes: Tag / Woche / Monat / Saison
 // ═══════════════════════════════════════════════════════════════════════
-function CalView({ scheds, user, defaultView = "woche" }) {
+function CalView({ scheds, user, defaultView = "woche", settings }) {
   const now = new Date();
-  const [viewMode, setViewMode] = useState(defaultView); // tag | woche | monat | saison
+  const [viewMode, setViewMode] = useState(defaultView);
   const [selDate, setSelDate]   = useState(todayStr);
   const [showAll, setShowAll]   = useState(false);
 
+  const myProductions = settings?.myProductions;
+  const hasProductionFilter = myProductions && myProductions.length > 0;
+
   // helpers
   const evsByDate = d => scheds.filter(e => e.date === d).sort((a,b) => (a.startTime||"").localeCompare(b.startTime||""));
-  const myFilter  = evs => showAll ? evs : evs.filter(e => {
-    if (isChorfrei(e)) return true;
-    const r = bassRequired(e);
-    return isVorstellung(e) || r === true || r === null;
-  });
+  const myFilter  = evs => {
+    let filtered = showAll ? evs : evs.filter(e => {
+      if (isChorfrei(e)) return true;
+      const r = bassRequired(e);
+      return isVorstellung(e) || r === true || r === null;
+    });
+    if (hasProductionFilter) {
+      filtered = filtered.filter(e =>
+        isChorfrei(e) || !e.production || myProductions.includes(e.production)
+      );
+    }
+    return filtered;
+  };
   const isChanged = e => e._edited && Date.now() - e.updatedAt < 48*3600000;
 
   const VIEW_MODES = [
@@ -2368,7 +2379,7 @@ function timeAgoShort(ts) {
 // ═══════════════════════════════════════════════════════════════════════
 //  EINSTELLUNGEN (Settings)
 // ═══════════════════════════════════════════════════════════════════════
-function EinstellungenView({ user, settings, saveSettings, onLogout }) {
+function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
   const VIEW_OPTIONS = [
     { value:"tag",    label:"Tagesansicht" },
     { value:"woche",  label:"Wochenansicht" },
@@ -2377,6 +2388,23 @@ function EinstellungenView({ user, settings, saveSettings, onLogout }) {
   ];
 
   const initials = user.name.split(" · ")[0].split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+
+  // 모든 작품 목록 추출 (중복 제거, 빈값 제외)
+  const allProductions = [...new Set(
+    scheds.map(e => e.production).filter(p => p && p.trim() !== "")
+  )].sort();
+
+  const myProductions = settings.myProductions || [];
+
+  const toggleProduction = (prod) => {
+    const next = myProductions.includes(prod)
+      ? myProductions.filter(p => p !== prod)
+      : [...myProductions, prod];
+    saveSettings({ ...settings, myProductions: next });
+  };
+
+  const selectAll = () => saveSettings({ ...settings, myProductions: allProductions });
+  const selectNone = () => saveSettings({ ...settings, myProductions: [] });
 
   return (
     <div className="page">
@@ -2393,6 +2421,54 @@ function EinstellungenView({ user, settings, saveSettings, onLogout }) {
           <div style={{ fontSize:"0.68rem", color:"var(--faint)", marginTop:4 }}>
             Sächsische Staatsoper Dresden
           </div>
+        </div>
+      </div>
+
+      {/* 내 작품 선택 */}
+      <div className="settings-section">
+        <div className="settings-title">Meine Produktionen</div>
+        <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:10 }}>
+          Nur ausgewählte Produktionen werden im Spielplan angezeigt.
+        </div>
+
+        <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+          <button className="btn btn-ghost btn-sm" onClick={selectAll}>Alle</button>
+          <button className="btn btn-ghost btn-sm" onClick={selectNone}>Keine</button>
+          <span style={{ marginLeft:"auto", fontSize:"0.74rem", color:"var(--muted)", alignSelf:"center" }}>
+            {myProductions.length} / {allProductions.length} ausgewählt
+          </span>
+        </div>
+
+        {allProductions.length === 0 && (
+          <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"10px 0" }}>
+            Noch keine Produktionen im Spielplan. Bitte Admin-Import durchführen.
+          </div>
+        )}
+
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {allProductions.map(prod => {
+            const isSelected = myProductions.includes(prod);
+            return (
+              <button key={prod} onClick={() => toggleProduction(prod)}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
+                  background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
+                  border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
+                  borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                  borderRadius:10, cursor:"pointer", transition:"all 0.15s", textAlign:"left",
+                  fontFamily:"var(--sans)" }}>
+                <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
+                  background: isSelected ? "var(--accent)" : "var(--s2)",
+                  border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
+                </div>
+                <span style={{ fontSize:"0.88rem", fontWeight: isSelected ? 600 : 400,
+                  color: isSelected ? "var(--text)" : "var(--text2)" }}>
+                  {prod}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
