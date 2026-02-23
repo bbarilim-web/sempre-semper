@@ -32,12 +32,14 @@ export function useAuth() {
     let profileUnsub = null;
 
     const unsub = onAuthStateChanged(auth, (u) => {
+      console.log("[Auth] onAuthStateChanged:", u ? u.email : "null");
       setAuthUser(u ?? null);
 
       if (profileUnsub) { profileUnsub(); profileUnsub = null; }
 
       if (u) {
         profileUnsub = onSnapshot(doc(db, COL.users, u.uid), snap => {
+          console.log("[Auth] profile snap exists:", snap.exists(), snap.data());
           setProfile(snap.exists() ? { id: u.uid, ...snap.data() } : null);
         });
       } else {
