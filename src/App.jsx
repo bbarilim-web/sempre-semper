@@ -1688,7 +1688,7 @@ Wichtig:
     parsePdf(f);
   };
 
-  const importSelected = () => {
+  const importSelected = async () => {
     const toImport = parsed.filter(e => e._import);
     const newScheds = toImport.map(e => ({
       ...e,
@@ -1696,9 +1696,14 @@ Wichtig:
       updatedAt: Date.now(),
       _edited: false,
     }));
-    setScheds([...scheds, ...newScheds]);
+    // Merge with existing, avoiding date+time+title duplicates
+    const existing = scheds.map(e => `${e.date}_${e.startTime}_${e.title}`);
+    const deduped = newScheds.filter(e => !existing.includes(`${e.date}_${e.startTime}_${e.title}`));
+    const merged = [...scheds, ...deduped];
+    await setScheds(merged);  // → Firestore batch write via useSchedules.saveAllScheds
     setParsed(null);
-    toast(`✓ ${newScheds.length} Termine importiert`);
+    const skipped = newScheds.length - deduped.length;
+    toast(`✓ ${deduped.length} Termine importiert${skipped > 0 ? ` · ${skipped} bereits vorhanden` : ""}`);
   };
 
   const groupedParsed = parsed ? (() => {
@@ -1832,7 +1837,7 @@ function AdminView({ scheds, setScheds, notifs, setNotifs, toast }) {
   return (
     <div className="page">
       <div className="atabs">
-        {[["scheds","Spielplan"], ["notifs","Mitteilungen"]].map(([v, l]) => (
+        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"]].map(([v, l]) => (
           <button key={v} className={`atab${atab === v ? " on" : ""}`} onClick={() => setAtab(v)}>{l}</button>
         ))}
       </div>
@@ -1873,6 +1878,10 @@ function AdminView({ scheds, setScheds, notifs, setNotifs, toast }) {
             </table>
           </div>
         </>
+      )}
+
+      {atab === "import" && (
+        <PdfView scheds={scheds} setScheds={setScheds} user={{ role: "admin" }} toast={toast} />
       )}
 
       {atab === "notifs" && (
