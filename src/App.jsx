@@ -1638,14 +1638,14 @@ function PdfView({ scheds, setScheds, user, toast }) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 8000,
+          max_tokens: 16000,
           system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
 Du analysierst Dienstpläne der Oper und extrahierst alle Termine.
 
 Die Pläne können verschiedene Formate haben:
 - Dienstplan (wöchentlich): enthält Zeit, Ort, Stückname, Zielgruppe, Dirigent
-- Monatsplan (April-Format): zwei Spalten (morgens/abends) mit Abkürzungen
-- Vorplanung (saisonal): sehr kompakt, Abkürzungen BP/BO/VS/GP/KHP/OHP/TE/Bel
+- Monatsplan: zwei Spalten (morgens/abends) mit Abkürzungen
+- Vorplanung (saisonal): sehr kompakt, Abkürzungen. Hier NUR Vorstellungen (VS), Generalproben (GP), Orchesterhauptproben (OHP) und Kleines Hauptproben (KHP) extrahieren - keine Beleuchtungsproben oder Toneinspielungen.
 - Tagesplan: sehr detailliert mit Minutenangaben
 
 Abkürzungen:
@@ -1654,27 +1654,27 @@ KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung,
 Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei, szen=Szenische Probe, mus=Musikalische Probe
 
 Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks, kein Text davor oder danach.
+Beginne direkt mit [ und ende mit ]
 
 Format jedes Eintrags:
 {
   "date": "YYYY-MM-DD",
   "startTime": "HH:MM",
-  "endTime": "HH:MM",
+  "endTime": "00:00",
   "eventType": "Vorstellung|Generalprobe|Bühnenprobe|Bühnenorchesterprobe|Orchesterhauptprobe|Kleines Hauptprobe|Musikalische Probe|Szenische Probe|Chorfrei|Halber Chorfrei|Toneinspielung|Beleuchtungsprobe",
-  "title": "Titel der Probe/Vorstellung",
+  "title": "Titel",
   "production": "Name des Stücks",
-  "location": "Ort",
-  "targetGroup": "Zielgruppe (z.B. Alle Herren, Alle Damen, Alle Eingeteilten)",
-  "conductor": "Dirigent/Einstudierung",
-  "note": "Besondere Hinweise",
-  "sourceType": "dienstplan|monatsplan|vorplanung|tagesplan"
+  "location": "Bühne",
+  "targetGroup": "Alle Eingeteilten",
+  "conductor": "",
+  "note": "",
+  "sourceType": "vorplanung"
 }
 
 Wichtig: 
 - Wenn Uhrzeit unbekannt, nutze "00:00"
-- Zielgruppe so genau wie möglich aus dem Text entnehmen
-- Bei "chorfrei" eventType="Chorfrei" setzen
-- Alle Termine des Dokuments erfassen`,
+- Bei Vorplanung: sourceType="vorplanung", nur wichtige Termine (VS/GP/OHP/KHP)
+- Antworte AUSSCHLIESSLICH mit dem JSON-Array, absolut kein anderer Text`,
           messages: [{
             role: "user",
             content: [
