@@ -1627,7 +1627,7 @@ function PdfView({ scheds, setScheds, user, toast }) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
+          max_tokens: 8000,
           system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
 Du analysierst Dienstpläne der Oper und extrahierst alle Termine.
 
@@ -1679,7 +1679,10 @@ Wichtig:
 
       const raw = data.content.map(c => c.text || "").join("");
       const clean = raw.replace(/```json|```/g, "").trim();
-      const events = JSON.parse(clean);
+      // Extract JSON array even if there's extra text
+      const match = clean.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("Kein JSON-Array in der Antwort gefunden");
+      const events = JSON.parse(match[0]);
       setParsed(events.map(e => ({ ...e, _import: !isChorfrei(e) })));
     } catch (e) {
       setError("Fehler beim Analysieren: " + e.message);
