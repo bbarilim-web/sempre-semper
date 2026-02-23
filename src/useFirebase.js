@@ -53,7 +53,14 @@ export function useAuth() {
     };
   }, []);
 
-  const loginWithGoogle = () => signInWithRedirect(auth, provider);
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      console.error("Login error:", e.code, e.message);
+      throw e;
+    }
+  };
 
   const logout = () => signOut(auth);
 
