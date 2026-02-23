@@ -69,38 +69,10 @@ function bassRequired(event) {
 
 // DVB Haltestellen — Theaterplatz-Bereich
 const DVB_STOPS = [
-  {
-    id: "theaterplatz",
-    name: "Theaterplatz",
-    lines: "2, 4, 8, 9",
-    url: "https://www.dvb.de/de-de/fahrplan/haltestellenanzeige/?stop=33000687&city=Dresden",
-    note: "Direkt vor der Semperoper",
-    icon: "🏛️",
-  },
-  {
-    id: "altmarkt",
-    name: "Altmarkt",
-    lines: "1, 2, 4, 6, 10, 12",
-    url: "https://www.dvb.de/de-de/fahrplan/haltestellenanzeige/?stop=33000020&city=Dresden",
-    note: "Einkaufen & Stadtmitte",
-    icon: "🛒",
-  },
-  {
-    id: "postplatz",
-    name: "Postplatz",
-    lines: "1, 2, 4, 6, 7, 8, 10, 11, 12",
-    url: "https://www.dvb.de/de-de/fahrplan/haltestellenanzeige/?stop=33000500&city=Dresden",
-    note: "Zentraler Knotenpunkt",
-    icon: "🚉",
-  },
-  {
-    id: "zwingerteich",
-    name: "Am Zwingerteich",
-    lines: "4, 8, 9",
-    url: "https://www.dvb.de/de-de/fahrplan/haltestellenanzeige/?stop=33000745&city=Dresden",
-    note: "Zwinger & Altstadt West",
-    icon: "🦢",
-  },
+  { id: "theaterplatz", stopId: "33000687", name: "Theaterplatz",    lines: "2, 4, 8, 9",                    note: "Direkt vor der Semperoper",  icon: "🏛️" },
+  { id: "altmarkt",     stopId: "33000020", name: "Altmarkt",        lines: "1, 2, 4, 6, 10, 12",            note: "Einkaufen & Stadtmitte",     icon: "🛒" },
+  { id: "postplatz",    stopId: "33000500", name: "Postplatz",       lines: "1, 2, 4, 6, 7, 8, 10, 11, 12", note: "Zentraler Knotenpunkt",       icon: "🚉" },
+  { id: "zwingerteich", stopId: "33000745", name: "Am Zwingerteich", lines: "4, 8, 9",                       note: "Zwinger & Altstadt West",    icon: "🦢" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2027,6 +1999,8 @@ function PinnwandView({ pinnwand, savePost, deletePost, updatePost, user, toast 
   const [fbText, setFbText]     = useState("");
   const [fbSent, setFbSent]     = useState(false);
   const [dvbStop, setDvbStop]   = useState(DVB_STOPS[0].id);
+  const [dvbDeps, setDvbDeps]   = useState({});
+  const [dvbRefresh, setDvbRefresh] = useState(0);
 
   const isAdmin = user.role === "admin";
 
@@ -2085,6 +2059,40 @@ function PinnwandView({ pinnwand, savePost, deletePost, updatePost, user, toast 
   };
 
   const activeStop = DVB_STOPS.find(s => s.id === dvbStop);
+
+  // DVB 실시간 출발 정보
+  useEffect(() => {
+    if (mode !== "dvb" || !activeStop) return;
+    const sid = activeStop.stopId;
+    setDvbDeps(d => ({ ...d, [sid]: { ...(d[sid]||{}), loading: true, error: null } }));
+    const parseDate = str => {
+      if (!str) return null;
+      const m = str.match(/\/Date\((\d+)/);
+      return m ? new Date(parseInt(m[1])) : null;
+    };
+    fetch(`https://webapi.vvo-online.de/dm?stopid=${sid}&limit=12&mot=Tram,CityBus`)
+      .then(r => r.json())
+      .then(data => {
+        const now = Date.now();
+        const deps = (data.Departures || []).map(d => {
+          const rt = parseDate(d.RealTime);
+          const st = parseDate(d.ScheduledTime);
+          const arrTime = rt || st;
+          const minutes = arrTime ? Math.round((arrTime.getTime() - now) / 60000) : null;
+          return {
+            line: d.LineName,
+            direction: d.Direction,
+            minutes,
+            isRealtime: !!rt,
+            delayed: d.State === "Delayed",
+          };
+        }).filter(d => d.minutes !== null && d.minutes >= 0).slice(0, 10);
+        setDvbDeps(prev => ({ ...prev, [sid]: { departures: deps, loading: false, error: null, ts: Date.now() } }));
+      })
+      .catch(() => {
+        setDvbDeps(prev => ({ ...prev, [sid]: { departures: [], loading: false, error: "Verbindungsfehler", ts: Date.now() } }));
+      });
+  }, [dvbStop, mode, dvbRefresh]);
 
   const timeAgoShort = ts => {
     const m = Math.floor((Date.now()-ts)/60000);
@@ -2173,59 +2181,108 @@ function PinnwandView({ pinnwand, savePost, deletePost, updatePost, user, toast 
 
       {/* ── DVB FAHRPLAN ── */}
       {mode === "dvb" && <>
-        <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:12 }}>
-          DVB Echzeit-Abfahrten · Haltestellen in der Nähe der Semperoper
-        </div>
-
-        {/* Stop selector */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
+        {/* 정류장 선택 */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:14 }}>
           {DVB_STOPS.map(s => (
             <button key={s.id} onClick={() => setDvbStop(s.id)}
               style={{ padding:"10px 12px", border:"1px solid",
                 borderColor: dvbStop===s.id ? "var(--accent)" : "var(--border)",
-                borderRadius:10, cursor:"pointer", fontFamily:"Inter,sans-serif",
-                background: dvbStop===s.id ? "rgba(59,158,255,0.12)" : "var(--s1)",
-                color: dvbStop===s.id ? "var(--accent)" : "var(--text2)",
+                borderRadius:10, cursor:"pointer", fontFamily:"var(--sans)",
+                background: dvbStop===s.id ? "rgba(232,23,58,0.08)" : "var(--s1)",
                 textAlign:"left", transition:"all 0.15s" }}>
               <div style={{ fontSize:"1rem", marginBottom:2 }}>{s.icon}</div>
-              <div style={{ fontSize:"0.82rem", fontWeight:700, lineHeight:1.2 }}>{s.name}</div>
-              <div style={{ fontSize:"0.66rem", color:"var(--muted)", marginTop:2 }}>Linie {s.lines}</div>
+              <div style={{ fontSize:"0.82rem", fontWeight:700, color: dvbStop===s.id ? "var(--accent)" : "var(--text)" }}>{s.name}</div>
+              <div style={{ fontSize:"0.64rem", color:"var(--muted)", marginTop:1 }}>Linie {s.lines}</div>
             </button>
           ))}
         </div>
 
-        {/* DVB iframe / link */}
-        {activeStop && (
-          <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
-            <div style={{ padding:"12px 14px", borderBottom:"1px solid var(--border)",
-              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div>
-                <div style={{ fontWeight:700, color:"var(--text)", fontSize:"0.92rem" }}>
-                  {activeStop.icon} {activeStop.name}
+        {/* 실시간 출발 시간표 */}
+        {activeStop && (() => {
+          const sid = activeStop.stopId;
+          const state = dvbDeps[sid] || { loading: true };
+          return (
+            <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
+              {/* 헤더 */}
+              <div style={{ padding:"12px 14px", borderBottom:"1px solid var(--border)",
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontWeight:700, color:"var(--text)", fontSize:"0.92rem" }}>
+                    {activeStop.icon} {activeStop.name}
+                  </div>
+                  <div style={{ fontSize:"0.7rem", color:"var(--muted)", marginTop:2 }}>
+                    {activeStop.note}
+                    {state.ts && <span style={{ marginLeft:8, color:"var(--faint)" }}>
+                      · Stand: {new Date(state.ts).toLocaleTimeString("de-DE", {hour:"2-digit", minute:"2-digit"})}
+                    </span>}
+                  </div>
                 </div>
-                <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>
-                  {activeStop.note} · Linien: {activeStop.lines}
-                </div>
+                <button onClick={() => setDvbRefresh(r => r+1)}
+                  style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
+                    color:"var(--muted)", padding:"6px 12px", cursor:"pointer", fontFamily:"var(--sans)",
+                    fontSize:"0.78rem", fontWeight:600, transition:"all 0.15s" }}>
+                  ↻ Aktualisieren
+                </button>
               </div>
-              <a href={activeStop.url} target="_blank" rel="noopener noreferrer"
-                style={{ padding:"7px 14px", background:"var(--accent)", color:"#fff",
-                  borderRadius:8, fontSize:"0.78rem", fontWeight:600, textDecoration:"none",
-                  display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                🔗 Öffnen
-              </a>
-            </div>
-            <iframe
-              src={activeStop.url}
-              title={`DVB ${activeStop.name}`}
-              style={{ width:"100%", height:380, border:"none", display:"block",
-                background:"var(--s2)" }}
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
-          </div>
-        )}
 
-        <div style={{ marginTop:10, fontSize:"0.72rem", color:"var(--faint)", textAlign:"center" }}>
-          Daten von dvb.de · Bei Problemen direkt öffnen ↗
+              {/* 출발 목록 */}
+              <div style={{ padding:"8px 0" }}>
+                {state.loading && (
+                  <div style={{ padding:"24px", textAlign:"center", color:"var(--muted)", fontSize:"0.82rem" }}>
+                    <div className="pulse">🚋</div>
+                    <div style={{ marginTop:8 }}>Lade Abfahrten…</div>
+                  </div>
+                )}
+                {state.error && (
+                  <div style={{ padding:"20px 14px", textAlign:"center", color:"var(--muted)", fontSize:"0.82rem" }}>
+                    ⚠ {state.error} — bitte aktualisieren
+                  </div>
+                )}
+                {!state.loading && !state.error && state.departures?.length === 0 && (
+                  <div style={{ padding:"20px 14px", textAlign:"center", color:"var(--faint)", fontSize:"0.82rem" }}>
+                    Keine Abfahrten gefunden
+                  </div>
+                )}
+                {(state.departures || []).map((dep, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
+                    padding:"10px 14px", borderBottom: i < state.departures.length-1 ? "1px solid var(--border)" : "none" }}>
+                    {/* 노선 번호 */}
+                    <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
+                      background: dep.line === "2" ? "#E8173A" : dep.line === "4" ? "#FF9500" :
+                        dep.line === "8" ? "#32D74B" : dep.line === "9" ? "#5856D6" :
+                        dep.line === "1" ? "#0066CC" : "#48484E",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontWeight:800, fontSize:"0.9rem", color:"white", fontFamily:"var(--sans)" }}>
+                      {dep.line}
+                    </div>
+                    {/* 방향 */}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:"0.86rem", fontWeight:500, color:"var(--text)",
+                        overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" }}>
+                        {dep.direction}
+                      </div>
+                      <div style={{ fontSize:"0.68rem", color:"var(--muted)", marginTop:1 }}>
+                        {dep.isRealtime ? "🔴 Echtzeit" : "🕐 Fahrplan"}
+                        {dep.delayed && <span style={{ marginLeft:6, color:"#FF9500" }}>· Verspätung</span>}
+                      </div>
+                    </div>
+                    {/* 분 */}
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontSize: dep.minutes <= 2 ? "1.1rem" : "1rem",
+                        fontWeight:800, fontFamily:"var(--sans)",
+                        color: dep.minutes <= 1 ? "var(--accent)" : dep.minutes <= 4 ? "#FF9500" : "var(--text)" }}>
+                        {dep.minutes <= 0 ? "jetzt" : `${dep.minutes} Min`}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        <div style={{ marginTop:10, fontSize:"0.7rem", color:"var(--faint)", textAlign:"center" }}>
+          Echtzeitdaten: VVO · Automatisch bei Haltestellen-Wechsel aktualisiert
         </div>
       </>}
 
