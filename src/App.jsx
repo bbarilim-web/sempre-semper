@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useFirebase } from "./useFirebase.js";
 
 // ═══════════════════════════════════════════════════════════════════════
 //  CONSTANTS & HELPERS
@@ -697,40 +698,25 @@ export default function App() {
   const [tab, setTab] = useState("calendar");
   const { toasts, add: toast } = useToast();
 
-  // ── localStorage helpers ──
-  const lsGet = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const {
+    user: authUser, profile,
+    loading: authLoading,
+    loginWithGoogle,
+    logout: fbLogout,
+    scheds, saveScheds,
+    pinnwand, savePinnwand,
+    settings, saveSettings,
+  } = useFirebase();
 
-  const [loaded, setLoaded] = useState(false);
-  const [scheds, setScheds] = useState([]);
-  const [pinnwand, setPinnwand] = useState([]);
-  const [settings, setSettings] = useState({ defaultView:"woche" });
-  const [user, setUser] = useState(null);
+  const user = profile;
 
-  useEffect(() => {
-    const s = lsGet("ss:scheds");
-    const p = lsGet("ss:pinnwand");
-    const u = lsGet("ss:user");
-    const st = lsGet("ss:settings");
-    setScheds(s && s.length > 0 ? s : SEED);
-    setPinnwand(p || SEED_PINNWAND);
-    if (u) setUser(u);
-    if (st) setSettings(st);
-    setLoaded(true);
-  }, []);
-
-  const saveScheds = (d) => { setScheds(d); lsSet("ss:scheds", d); };
-  const savePinnwand = (d) => { setPinnwand(d); lsSet("ss:pinnwand", d); };
-  const saveSettings = (d) => { setSettings(d); lsSet("ss:settings", d); };
   const savePost = (p) => { const next = [p, ...pinnwand.filter(x => x.id !== p.id)]; savePinnwand(next); };
   const deletePost = (id) => { savePinnwand(pinnwand.filter(p => p.id !== id)); };
   const updatePost = (id, changes) => { savePinnwand(pinnwand.map(p => p.id === id ? { ...p, ...changes } : p)); };
   const saveAllScheds = (events) => { saveScheds(events); };
+  const logout = () => { fbLogout(); setTab("calendar"); };
 
-  const login = (u) => { setUser(u); lsSet("ss:user", u); };
-  const logout = () => { setUser(null); lsSet("ss:user", null); setTab("calendar"); };
-
-  if (!loaded) return (
+  if (authLoading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       minHeight:"100vh", background:"#0A0A0B", gap:16 }}>
       <svg viewBox="0 0 56 40" fill="none" width="52" height="37">
@@ -740,10 +726,29 @@ export default function App() {
     </div>
   );
 
-  if (!user) return (
+  if (!authUser) return (
     <>
       <style>{CSS}</style>
-      <LoginScreen onLogin={login} />
+      <LoginScreen onLogin={loginWithGoogle} />
+    </>
+  );
+
+  if (!profile) return (
+    <>
+      <style>{CSS}</style>
+      <RegistrationScreen
+        googleUser={authUser}
+        onSave={async (name, part) => {
+          const voice = PART_VOICE[part];
+          await saveProfile(authUser.uid, {
+            name, part, voice,
+            role: "member",
+            email: authUser.email,
+            createdAt: Date.now(),
+          });
+        }}
+        onLogout={logout}
+      />
     </>
   );
 
@@ -907,7 +912,7 @@ function LoginScreen({ onLogin }) {
         <div className="login-subtitle">Sächsische Staatsoper · Opernchor</div>
 
         {step === "main" && <>
-          <button className="google-btn" onClick={() => {}}>
+          <button className="google-btn" onClick={onLogin}>
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>

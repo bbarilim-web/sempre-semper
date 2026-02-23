@@ -54,10 +54,14 @@ export function useAuth() {
 
   const loginWithGoogle = async () => {
     try {
-      await signInWithRedirect(auth, provider);
+      await signInWithPopup(auth, provider);
     } catch (e) {
-      console.error("Login error:", e);
-      throw e;
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(auth, provider);
+      } else {
+        console.error("Login error:", e);
+        throw e;
+      }
     }
   };
 
@@ -175,4 +179,32 @@ export function useSettings(uid) {
   };
 
   return { settings, saveSettings };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  COMBINED HOOK — useFirebase()
+// ═══════════════════════════════════════════════════════════════════════
+export function useFirebase() {
+  const { authUser, profile, loginWithGoogle, logout, saveProfile } = useAuth();
+  const uid = authUser?.uid ?? null;
+  const { scheds, saveAllScheds } = useSchedules([], uid);
+  const { pinnwand, savePost, deletePost, updatePost } = usePinnwand([], uid);
+  const { settings, saveSettings } = useSettings(uid);
+
+  const loading = authUser === undefined;
+
+  return {
+    user: authUser,
+    profile,
+    loading,
+    loginWithGoogle,
+    logout,
+    saveProfile,
+    scheds,
+    saveScheds: saveAllScheds,
+    pinnwand,
+    savePinnwand: (arr) => arr.forEach(p => savePost(p)),
+    settings,
+    saveSettings,
+  };
 }
