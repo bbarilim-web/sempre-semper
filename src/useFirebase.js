@@ -29,6 +29,11 @@ export function useAuth() {
   const [profile,  setProfile]  = useState(null);
 
   useEffect(() => {
+    // Handle redirect result after Google login
+    getRedirectResult(auth).catch(e => console.error("Redirect result error:", e));
+  }, []);
+
+  useEffect(() => {
     let profileUnsub = null;
 
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -52,18 +57,7 @@ export function useAuth() {
     };
   }, []);
 
-  const loginWithGoogle = async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (e) {
-      if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
-        await signInWithRedirect(auth, provider);
-      } else {
-        console.error("Login error:", e);
-        throw e;
-      }
-    }
-  };
+  const loginWithGoogle = () => signInWithRedirect(auth, provider);
 
   const logout = () => signOut(auth);
 
