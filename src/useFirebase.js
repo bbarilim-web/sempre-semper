@@ -26,20 +26,14 @@ const COL = {
 // ═══════════════════════════════════════════════════════════════════════
 export function useAuth() {
   const [authUser, setAuthUser] = useState(undefined); // undefined = loading
-  const [profile,  setProfile]  = useState(null);
-
-  useEffect(() => {
-    // Handle redirect result after Google login
-    getRedirectResult(auth).catch(e => console.error("Redirect result error:", e));
-  }, []);
+  const [profile,  setProfile]  = useState(undefined); // undefined = loading
 
   useEffect(() => {
     let profileUnsub = null;
 
     const unsub = onAuthStateChanged(auth, (u) => {
-      setAuthUser(u ?? null); // null = not logged in, never stay undefined
+      setAuthUser(u ?? null);
 
-      // Clean up previous profile listener
       if (profileUnsub) { profileUnsub(); profileUnsub = null; }
 
       if (u) {
@@ -185,7 +179,7 @@ export function useFirebase() {
   const { pinnwand, savePost, deletePost, updatePost } = usePinnwand([], uid);
   const { settings, saveSettings } = useSettings(uid);
 
-  const loading = authUser === undefined;
+  const loading = authUser === undefined || (authUser !== null && profile === undefined);
 
   return {
     user: authUser,
