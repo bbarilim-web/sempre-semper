@@ -709,6 +709,8 @@ export default function App() {
   } = useFirebase();
 
   const user = profile;
+  const [notifs, setNotifs] = useState([]);
+  const saveNotifs = (d) => setNotifs(d);
 
   const savePost = (p) => { const next = [p, ...pinnwand.filter(x => x.id !== p.id)]; savePinnwand(next); };
   const deletePost = (id) => { savePinnwand(pinnwand.filter(p => p.id !== id)); };
