@@ -1,7 +1,7 @@
 {
   "name": "Sempre Semper",
-  "short_name": "Sempre",
-  "description": "Digitaler Spielplan des Staatsopernchors Dresden",
+  "short_name": "Semper",
+  "description": "Spielplan-App des Staatsopernchors Dresden",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0A0B",
