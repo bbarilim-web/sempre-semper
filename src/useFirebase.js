@@ -199,6 +199,7 @@ export function useFirebase() {
     saveProfile,
     scheds,
     saveScheds: saveAllScheds,
+    deleteEvent,
     pinnwand,
     savePinnwand: (arr) => arr.forEach(p => savePost(p)),
     settings,

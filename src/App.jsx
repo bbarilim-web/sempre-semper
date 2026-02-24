@@ -675,7 +675,7 @@ export default function App() {
     loading: authLoading,
     loginWithGoogle,
     logout: fbLogout,
-    scheds, saveScheds,
+    scheds, saveScheds, deleteEvent,
     pinnwand, savePinnwand,
     settings, saveSettings,
   } = useFirebase();
@@ -824,7 +824,7 @@ export default function App() {
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
           {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} notifs={notifs} setNotifs={saveNotifs} toast={toast} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} />}
         </main>
 
         <nav className="bottomnav">
@@ -1119,7 +1119,22 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
   const hasProductionFilter = myProductions && myProductions.length > 0;
 
   // helpers
-  const evsByDate = d => scheds.filter(e => e.date === d).sort((a,b) => (a.startTime||"").localeCompare(b.startTime||""));
+  const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
+  const evsByDate = d => {
+    const dayEvs = scheds.filter(e => e.date === d);
+    // 중복 제거: 같은 시간+제목은 더 상세한 소스 우선
+    const deduped = Object.values(
+      dayEvs.reduce((acc, e) => {
+        const key = `${e.startTime}_${e.production || e.title}`;
+        const existing = acc[key];
+        if (!existing || (SOURCE_PRIORITY[e.sourceType] ?? 9) < (SOURCE_PRIORITY[existing.sourceType] ?? 9)) {
+          acc[key] = e;
+        }
+        return acc;
+      }, {})
+    );
+    return deduped.sort((a,b) => (a.startTime||"").localeCompare(b.startTime||""));
+  };
   const myFilter  = evs => {
     let filtered = showAll ? evs : evs.filter(e => {
       if (isChorfrei(e)) return true;
@@ -1456,9 +1471,23 @@ function ListView({ scheds, user }) {
 //  VORSTELLUNG VIEW  ←  핵심 기능: 공연 일정만 보기
 // ═══════════════════════════════════════════════════════════════════════
 function VorstellungView({ scheds, user }) {
-  const vorstellungen = scheds
-    .filter(e => isVorstellung(e) || e.eventType === "Generalprobe")
-    .filter(e => e.date >= todayStr)
+  // 중복 제거: 같은 날짜+시간+제목은 하나만 (더 상세한 sourceType 우선)
+  const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
+  const deduped = Object.values(
+    scheds
+      .filter(e => isVorstellung(e) || e.eventType === "Generalprobe")
+      .filter(e => e.date >= todayStr)
+      .reduce((acc, e) => {
+        const key = `${e.date}_${e.startTime}_${e.production || e.title}`;
+        const existing = acc[key];
+        if (!existing || (SOURCE_PRIORITY[e.sourceType] ?? 9) < (SOURCE_PRIORITY[existing.sourceType] ?? 9)) {
+          acc[key] = e;
+        }
+        return acc;
+      }, {})
+  );
+
+  const vorstellungen = deduped
     .sort((a, b) => (a.date + (a.startTime || "")).localeCompare(b.date + (b.startTime || "")));
 
   // Group by month
@@ -1523,10 +1552,6 @@ function VorstellungView({ scheds, user }) {
       })}
 
       {vorstellungen.length === 0 && <div className="empty">Keine Vorstellungen geplant.</div>}
-
-      <div style={{ marginTop: 20, padding: "14px 16px", background: "rgba(201,168,76,0.05)", border: "1px solid var(--border)", fontSize: "0.78rem", color: "var(--muted)" }}>
-        <strong style={{ color: "var(--accent)" }}>Hinweis:</strong> Tage ohne Vorstellung sind grundsätzlich für externe Engagements verfügbar. Proben können in Absprache mit der Chorleitung angepasst werden.
-      </div>
     </div>
   );
 }
@@ -1818,7 +1843,7 @@ Wichtig:
 // ═══════════════════════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ═══════════════════════════════════════════════════════════════════════
-function AdminView({ scheds, setScheds, notifs, setNotifs, toast }) {
+function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
   const [notifModal, setNotifModal] = useState(false);
@@ -1905,7 +1930,7 @@ function AdminView({ scheds, setScheds, notifs, setNotifs, toast }) {
             }
             setEditModal(null);
           }}
-          onDelete={editModal !== "new" ? () => { setScheds(scheds.filter(e => e.id !== editModal.id)); setEditModal(null); toast("Termin gelöscht"); } : null}
+          onDelete={editModal !== "new" ? async () => { await deleteEvent(editModal.id); setEditModal(null); toast("Termin gelöscht"); } : null}
           onClose={() => setEditModal(null)}
         />
       )}
