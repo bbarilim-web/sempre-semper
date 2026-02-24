@@ -21,6 +21,23 @@ const isVorstellung = (e) => e && e.eventType === "Vorstellung";
 const isChorfrei = (e) => e && (e.eventType === "Chorfrei" || e.eventType === "Halber Chorfrei");
 const isProbe = (e) => e && !isVorstellung(e) && !isChorfrei(e);
 
+// "Elias, Parsifal" 또는"(Elias, Parsifal)" 또는 "Elias/Parsifal" → ["Elias", "Parsifal"]
+const splitProductions = (production) => {
+  if (!production) return [];
+  return production
+    .replace(/[()]/g, "")
+    .split(/[,/]+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+};
+
+// 이벤트의 작품이 내 작품 목록과 하나라도 겹치는지 확인
+const matchesMyProductions = (event, myProductions) => {
+  if (!event.production) return true;
+  const prods = splitProductions(event.production);
+  return prods.some(p => myProductions.includes(p));
+};
+
 const fmtD = d => d.toISOString().split("T")[0];
 const addD = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const today = new Date();
@@ -69,10 +86,10 @@ function bassRequired(event) {
 
 // DVB Haltestellen — Theaterplatz-Bereich
 const DVB_STOPS = [
-  { id: "theaterplatz", stopId: "33000020", name: "Theaterplatz",    lines: "2, 4, 8, 9",                    note: "Direkt vor der Semperoper",  icon: "🏛️" },
-  { id: "altmarkt",     stopId: "33000004", name: "Altmarkt",        lines: "1, 2, 4, 6, 10, 12",            note: "Einkaufen & Stadtmitte",     icon: "🛒" },
-  { id: "postplatz",    stopId: "33000037", name: "Postplatz",       lines: "1, 2, 4, 6, 7, 8, 10, 11, 12", note: "Zentraler Knotenpunkt",       icon: "🚉" },
-  { id: "zwingerteich", stopId: "33000035", name: "Am Zwingerteich", lines: "4, 8, 9",                       note: "Zwinger & Altstadt West",    icon: "🦢" },
+  { id: "theaterplatz", stopId: "33000687", name: "Theaterplatz",    lines: "2, 4, 8, 9",                    note: "Direkt vor der Semperoper",  icon: "🏛️" },
+  { id: "altmarkt",     stopId: "33000020", name: "Altmarkt",        lines: "1, 2, 4, 6, 10, 12",            note: "Einkaufen & Stadtmitte",     icon: "🛒" },
+  { id: "postplatz",    stopId: "33000500", name: "Postplatz",       lines: "1, 2, 4, 6, 7, 8, 10, 11, 12", note: "Zentraler Knotenpunkt",       icon: "🚉" },
+  { id: "zwingerteich", stopId: "33000745", name: "Am Zwingerteich", lines: "4, 8, 9",                       note: "Zwinger & Altstadt West",    icon: "🦢" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1143,7 +1160,7 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
     });
     if (hasProductionFilter) {
       filtered = filtered.filter(e =>
-        isChorfrei(e) || !e.production || myProductions.includes(e.production)
+        isChorfrei(e) || matchesMyProductions(e, myProductions)
       );
     }
     return filtered;
@@ -2471,9 +2488,9 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
 
   const initials = user.name.split(" · ")[0].split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
 
-  // 모든 작품 목록 추출 (중복 제거, 빈값 제외)
+  // 모든 작품 목록 추출 — 복합 작품명("Elias, Parsifal", "Elias/Parsifal") 분리
   const allProductions = [...new Set(
-    scheds.map(e => e.production).filter(p => p && p.trim() !== "")
+    scheds.flatMap(e => splitProductions(e.production))
   )].sort();
 
   const myProductions = settings.myProductions || [];
