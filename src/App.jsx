@@ -86,10 +86,10 @@ function bassRequired(event) {
 
 // DVB Haltestellen — Theaterplatz-Bereich
 const DVB_STOPS = [
-  { id: "theaterplatz", stopId: "33000687", name: "Theaterplatz",    lines: "2, 4, 8, 9",                    note: "Direkt vor der Semperoper",  icon: "🏛️" },
-  { id: "altmarkt",     stopId: "33000020", name: "Altmarkt",        lines: "1, 2, 4, 6, 10, 12",            note: "Einkaufen & Stadtmitte",     icon: "🛒" },
-  { id: "postplatz",    stopId: "33000500", name: "Postplatz",       lines: "1, 2, 4, 6, 7, 8, 10, 11, 12", note: "Zentraler Knotenpunkt",       icon: "🚉" },
-  { id: "zwingerteich", stopId: "33000745", name: "Am Zwingerteich", lines: "4, 8, 9",                       note: "Zwinger & Altstadt West",    icon: "🦢" },
+  { id: "theaterplatz", stopId: "33000020", name: "Theaterplatz",    lines: "2, 4, 8, 9",                    note: "Direkt vor der Semperoper",  icon: "🏛️" },
+  { id: "altmarkt",     stopId: "33000004", name: "Altmarkt",        lines: "1, 2, 4, 6, 10, 12",            note: "Einkaufen & Stadtmitte",     icon: "🛒" },
+  { id: "postplatz",    stopId: "33000037", name: "Postplatz",       lines: "1, 2, 4, 6, 7, 8, 10, 11, 12", note: "Zentraler Knotenpunkt",       icon: "🚉" },
+  { id: "zwingerteich", stopId: "33000035", name: "Am Zwingerteich", lines: "4, 8, 9",                       note: "Zwinger & Altstadt West",    icon: "🦢" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
