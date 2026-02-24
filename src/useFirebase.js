@@ -184,7 +184,7 @@ export function useSettings(uid) {
 export function useFirebase() {
   const { authUser, profile, loginWithGoogle, logout, saveProfile } = useAuth();
   const uid = authUser?.uid ?? null;
-  const { scheds, saveAllScheds } = useSchedules([], uid);
+  const { scheds, saveAllScheds, deleteEvent } = useSchedules([], uid);
   const { pinnwand, savePost, deletePost, updatePost } = usePinnwand([], uid);
   const { settings, saveSettings } = useSettings(uid);
 
