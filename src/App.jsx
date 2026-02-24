@@ -693,7 +693,7 @@ export default function App() {
     loginWithGoogle,
     logout: fbLogout,
     scheds, saveScheds, deleteEvent,
-    pinnwand, savePinnwand,
+    pinnwand, savePinnwand, deletePost: fbDeletePost,
     settings, saveSettings,
   } = useFirebase();
 
@@ -702,7 +702,7 @@ export default function App() {
   const saveNotifs = (d) => setNotifs(d);
 
   const savePost = (p) => { const next = [p, ...pinnwand.filter(x => x.id !== p.id)]; savePinnwand(next); };
-  const deletePost = (id) => { savePinnwand(pinnwand.filter(p => p.id !== id)); };
+  const deletePost = fbDeletePost;
   const updatePost = (id, changes) => { savePinnwand(pinnwand.map(p => p.id === id ? { ...p, ...changes } : p)); };
   const saveAllScheds = (events) => { saveScheds(events); };
   const logout = () => { fbLogout(); setTab("calendar"); };
