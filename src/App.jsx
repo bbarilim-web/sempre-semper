@@ -680,6 +680,7 @@ export default function App() {
     user: authUser, profile,
     loading: authLoading,
     loginWithGoogle,
+    saveProfile,
     logout: fbLogout,
     scheds, saveScheds, deleteEvent,
     pinnwand, savePinnwand, deletePost: fbDeletePost,
