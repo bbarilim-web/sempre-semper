@@ -736,6 +736,26 @@ export default function App() {
   const isAdmin = user.role === "admin";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
 
+  // 일요일 자정 이후 앱 실행 시 지난 Probe 자동 삭제 (Admin만)
+  useEffect(() => {
+    if (!isAdmin || scheds.length === 0) return;
+    const now = new Date();
+    const day = now.getDay(); // 0=일요일
+    const lastCleanKey = "lastProbeClean";
+    const lastClean = localStorage.getItem(lastCleanKey);
+    const thisWeekSunday = new Date(now);
+    thisWeekSunday.setDate(now.getDate() - day);
+    thisWeekSunday.setHours(0, 0, 0, 0);
+    const sundayStr = thisWeekSunday.toISOString().split("T")[0];
+    if (lastClean >= sundayStr) return; // 이번 주 이미 삭제함
+    const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
+    if (toDelete.length === 0) { localStorage.setItem(lastCleanKey, sundayStr); return; }
+    Promise.all(toDelete.map(e => deleteEvent(e.id))).then(() => {
+      localStorage.setItem(lastCleanKey, sundayStr);
+      console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제 완료`);
+    });
+  }, [isAdmin, scheds.length]);
+
   const unreadPinn = pinnwand.filter(p => !p.readBy?.includes(user.id)).length;
   // ── SVG Nav Icons ──────────────────────────────────────────────────
   const NavIcons = {
@@ -1856,7 +1876,16 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast })
         <>
           <div className="sh">
             <h2>Spielplan ({scheds.length} Einträge)</h2>
-            <button className="btn btn-gold btn-sm" onClick={() => setEditModal("new")}>+ Neuer Termin</button>
+            <div style={{ display:"flex", gap:8 }}>
+              <button className="btn btn-danger btn-sm" onClick={async () => {
+                const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
+                if (toDelete.length === 0) { toast("Keine alten Proben gefunden."); return; }
+                if (!confirm(`${toDelete.length}개의 지난 Probe를 삭제할까요?`)) return;
+                for (const e of toDelete) await deleteEvent(e.id);
+                toast(`✓ ${toDelete.length}개 삭제 완료`);
+              }}>🗑 Alte Proben löschen</button>
+              <button className="btn btn-gold btn-sm" onClick={() => setEditModal("new")}>+ Neuer Termin</button>
+            </div>
           </div>
           <div className="twrap">
             <table>
