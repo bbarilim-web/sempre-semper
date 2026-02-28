@@ -200,6 +200,7 @@ export function useFirebase() {
     scheds,
     saveScheds: saveAllScheds,
     deleteEvent,
+    deletePost,
     pinnwand,
     savePinnwand: (arr) => arr.forEach(p => savePost(p)),
     settings,
