@@ -1007,7 +1007,7 @@ function RegistrationScreen({ googleUser, onSave, onLogout }) {
     if (!part)        { setErr("Bitte Stimmgruppe auswählen."); return; }
     setSaving(true);
     try { await onSave(name.trim(), part); }
-    catch(e) { setErr("Fehler beim Speichern."); setSaving(false); }
+    catch(e) { console.error("Save error:", e); setErr("Fehler: " + e.message); setSaving(false); }
   };
 
   return (
