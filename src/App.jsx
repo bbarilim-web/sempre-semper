@@ -740,18 +740,20 @@ export default function App() {
   useEffect(() => {
     if (!isAdmin || scheds.length === 0) return;
     const now = new Date();
-    const day = now.getDay(); // 0=일요일
+    const day = now.getDay(); // 0=일, 1=월
     const lastCleanKey = "lastProbeClean";
     const lastClean = localStorage.getItem(lastCleanKey);
-    const thisWeekSunday = new Date(now);
-    thisWeekSunday.setDate(now.getDate() - day);
-    thisWeekSunday.setHours(0, 0, 0, 0);
-    const sundayStr = thisWeekSunday.toISOString().split("T")[0];
-    if (lastClean >= sundayStr) return; // 이번 주 이미 삭제함
+    // 가장 최근 지나간 월요일 00:00 계산 (일요일→월요일 자정 기준)
+    const lastMonday = new Date(now);
+    const daysToMonday = day === 0 ? 6 : day - 1; // 일요일이면 6일 전 월요일
+    lastMonday.setDate(now.getDate() - daysToMonday);
+    lastMonday.setHours(0, 0, 0, 0);
+    const mondayStr = lastMonday.toISOString().split("T")[0];
+    if (lastClean >= mondayStr) return; // 이번 주 이미 삭제함
     const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
-    if (toDelete.length === 0) { localStorage.setItem(lastCleanKey, sundayStr); return; }
+    if (toDelete.length === 0) { localStorage.setItem(lastCleanKey, mondayStr); return; }
     Promise.all(toDelete.map(e => deleteEvent(e.id))).then(() => {
-      localStorage.setItem(lastCleanKey, sundayStr);
+      localStorage.setItem(lastCleanKey, mondayStr);
       console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제 완료`);
     });
   }, [isAdmin, scheds.length]);
