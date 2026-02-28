@@ -434,18 +434,7 @@ body {
   font-family: var(--sans); font-size: 0.88rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
 }
 .google-btn:hover { background: var(--s3); border-color: var(--border2); }
-.demo-section { margin-top: 20px; }
-.demo-label { font-size: 0.66rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
-.demo-btn {
-  width: 100%; padding: 10px 14px; margin-bottom: 6px;
-  background: var(--s2); border: 1px solid var(--border); border-radius: 10px; color: var(--text2);
-  font-family: var(--sans); font-size: 0.85rem; font-weight: 400; cursor: pointer;
-  display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;
-}
-.demo-btn:hover { border-color: var(--accent); background: var(--accent-dim); color: var(--text); }
-.demo-role { font-size: 0.7rem; color: var(--faint); font-weight: 500; }
 
-/* ── Section head ── */
 .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sh h2 { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
 .sh-sub { font-size: 0.74rem; color: var(--muted); margin-top: 1px; }
@@ -918,20 +907,7 @@ function LoginScreen({ onLogin }) {
             ✦ Neu registrieren
           </button>
 
-          <div className="demo-section">
-            <div className="demo-label">Demo-Zugang</div>
-            {USERS.map(u => (
-              <button key={u.id} className="demo-btn" onClick={() => onLogin(u)}>
-                <span>
-                  <span style={{ color: VOICE_COLOR[u.voice], marginRight:6 }}>●</span>
-                  {u.name.split(" · ")[0]}
-                </span>
-                <span className="demo-role">
-                  {u.role === "admin" ? "Chorleitung" : (u.part || u.voice)}
-                </span>
-              </button>
-            ))}
-          </div>
+
         </>}
 
         {step === "register" && <>
