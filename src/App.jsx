@@ -736,30 +736,7 @@ export default function App() {
   const isAdmin = user.role === "admin";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
 
-  // 일요일→월요일 자정 이후 앱 실행 시 지난 Probe 자동 삭제 (Admin만)
-  useEffect(() => {
-    if (!isAdmin || scheds.length === 0) return;
-    const now = new Date();
-    const day = now.getDay();
-    // 이번 주 월요일 날짜 계산
-    const lastMonday = new Date(now);
-    const daysToMonday = day === 0 ? 6 : day - 1;
-    lastMonday.setDate(now.getDate() - daysToMonday);
-    lastMonday.setHours(0, 0, 0, 0);
-    const mondayStr = fmtD(lastMonday);
-    // settings에 마지막 삭제 날짜 저장 (localStorage 대신)
-    const lastClean = settings?.lastProbeClean || "";
-    if (lastClean >= mondayStr) return;
-    const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
-    const doClean = async () => {
-      if (toDelete.length > 0) {
-        await Promise.all(toDelete.map(e => deleteEvent(e.id)));
-        console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제 완료`);
-      }
-      saveSettings({ ...settings, lastProbeClean: mondayStr });
-    };
-    doClean();
-  }, [isAdmin, scheds.length]);
+
 
   const unreadPinn = pinnwand.filter(p => !p.readBy?.includes(user.id)).length;
   // ── SVG Nav Icons ──────────────────────────────────────────────────
@@ -856,7 +833,7 @@ export default function App() {
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
           {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} />}
         </main>
 
         <nav className="bottomnav">
@@ -1862,12 +1839,31 @@ Wichtig:
 // ═══════════════════════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ═══════════════════════════════════════════════════════════════════════
-function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast }) {
+function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
   const [notifModal, setNotifModal] = useState(false);
 
   const sortedScheds = [...scheds].sort((a, b) => a.date.localeCompare(b.date));
+
+  // 매주 월요일 00:00 이후 지난 Probe 자동 삭제
+  useEffect(() => {
+    if (scheds.length === 0) return;
+    const now = new Date();
+    const day = now.getDay();
+    const lastMonday = new Date(now);
+    const daysToMonday = day === 0 ? 6 : day - 1;
+    lastMonday.setDate(now.getDate() - daysToMonday);
+    lastMonday.setHours(0, 0, 0, 0);
+    const mondayStr = fmtD(lastMonday);
+    const lastClean = settings?.lastProbeClean || "";
+    if (lastClean >= mondayStr) return;
+    const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
+    Promise.all(toDelete.map(e => deleteEvent(e.id))).then(() => {
+      saveSettings({ ...settings, lastProbeClean: mondayStr });
+      if (toDelete.length > 0) console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제`);
+    });
+  }, [scheds.length, settings?.lastProbeClean]);
 
   return (
     <div className="page">
