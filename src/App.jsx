@@ -736,26 +736,29 @@ export default function App() {
   const isAdmin = user.role === "admin";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
 
-  // 일요일 자정 이후 앱 실행 시 지난 Probe 자동 삭제 (Admin만)
+  // 일요일→월요일 자정 이후 앱 실행 시 지난 Probe 자동 삭제 (Admin만)
   useEffect(() => {
     if (!isAdmin || scheds.length === 0) return;
     const now = new Date();
-    const day = now.getDay(); // 0=일, 1=월
-    const lastCleanKey = "lastProbeClean";
-    const lastClean = localStorage.getItem(lastCleanKey);
-    // 가장 최근 지나간 월요일 00:00 계산 (일요일→월요일 자정 기준)
+    const day = now.getDay();
+    // 이번 주 월요일 날짜 계산
     const lastMonday = new Date(now);
-    const daysToMonday = day === 0 ? 6 : day - 1; // 일요일이면 6일 전 월요일
+    const daysToMonday = day === 0 ? 6 : day - 1;
     lastMonday.setDate(now.getDate() - daysToMonday);
     lastMonday.setHours(0, 0, 0, 0);
-    const mondayStr = lastMonday.toISOString().split("T")[0];
-    if (lastClean >= mondayStr) return; // 이번 주 이미 삭제함
+    const mondayStr = fmtD(lastMonday);
+    // settings에 마지막 삭제 날짜 저장 (localStorage 대신)
+    const lastClean = settings?.lastProbeClean || "";
+    if (lastClean >= mondayStr) return;
     const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
-    if (toDelete.length === 0) { localStorage.setItem(lastCleanKey, mondayStr); return; }
-    Promise.all(toDelete.map(e => deleteEvent(e.id))).then(() => {
-      localStorage.setItem(lastCleanKey, mondayStr);
-      console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제 완료`);
-    });
+    const doClean = async () => {
+      if (toDelete.length > 0) {
+        await Promise.all(toDelete.map(e => deleteEvent(e.id)));
+        console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제 완료`);
+      }
+      saveSettings({ ...settings, lastProbeClean: mondayStr });
+    };
+    doClean();
   }, [isAdmin, scheds.length]);
 
   const unreadPinn = pinnwand.filter(p => !p.readBy?.includes(user.id)).length;
