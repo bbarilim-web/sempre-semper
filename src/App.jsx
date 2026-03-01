@@ -1674,7 +1674,7 @@ function ChangesView({ scheds, notifs, user }) {
 // ═══════════════════════════════════════════════════════════════════════
 //  PDF VIEW  — Claude API parses Semperoper schedule formats
 // ═══════════════════════════════════════════════════════════════════════
-function PdfView({ scheds, setScheds, user, toast }) {
+function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
   const [drag, setDrag] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parsed, setParsed] = useState(null);
@@ -1778,14 +1778,36 @@ Wichtig:
       updatedAt: Date.now(),
       _edited: false,
     }));
-    // Merge with existing, avoiding date+time+title duplicates
-    const existing = scheds.map(e => `${e.date}_${e.startTime}_${e.title}`);
-    const deduped = newScheds.filter(e => !existing.includes(`${e.date}_${e.startTime}_${e.title}`));
-    const merged = [...scheds, ...deduped];
-    await setScheds(merged);  // → Firestore batch write via useSchedules.saveAllScheds
+
+    // 새 파일에 포함된 날짜 범위 파악
+    const newDates = [...new Set(newScheds.map(e => e.date))];
+    const newSourceType = newScheds[0]?.sourceType || "dienstplan";
+
+    // 같은 날짜 + 같거나 낮은 우선순위 소스의 기존 일정 삭제
+    // 우선순위: tagesplan(0) > dienstplan(1) > monatsplan(2) > vorplanung(3)
+    const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
+    const newPriority = SOURCE_PRIORITY[newSourceType] ?? 9;
+
+    const toDelete = scheds.filter(e =>
+      newDates.includes(e.date) &&
+      (SOURCE_PRIORITY[e.sourceType] ?? 9) >= newPriority
+    );
+
+    // 기존 일정 삭제
+    for (const e of toDelete) await deleteEvent(e.id);
+
+    // 새 일정 저장 (Vorstellung은 덮어쓰지 않고 중복 체크)
+    const remainingScheds = scheds.filter(e => !toDelete.map(d => d.id).includes(e.id));
+    const existingVS = remainingScheds.map(e => `${e.date}_${e.startTime}_${e.title}`);
+    const toAdd = newScheds.filter(e =>
+      isVorstellung(e)
+        ? !existingVS.includes(`${e.date}_${e.startTime}_${e.title}`)
+        : true
+    );
+    const merged = [...remainingScheds, ...toAdd];
+    await setScheds(merged);
     setParsed(null);
-    const skipped = newScheds.length - deduped.length;
-    toast(`✓ ${deduped.length} Termine importiert${skipped > 0 ? ` · ${skipped} bereits vorhanden` : ""}`);
+    toast(`✓ ${toAdd.length}개 추가, ${toDelete.length}개 기존 일정 교체`);
   };
 
   const groupedParsed = parsed ? (() => {
@@ -1991,7 +2013,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
       )}
 
       {atab === "import" && (
-        <PdfView scheds={scheds} setScheds={setScheds} user={{ role: "admin" }} toast={toast} />
+        <PdfView scheds={scheds} setScheds={setScheds} deleteEvent={deleteEvent} user={{ role: "admin" }} toast={toast} />
       )}
 
       {atab === "notifs" && (
