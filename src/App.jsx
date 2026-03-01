@@ -22,12 +22,70 @@ const isChorfrei = (e) => e && (e.eventType === "Chorfrei" || e.eventType === "H
 const isProbe = (e) => e && !isVorstellung(e) && !isChorfrei(e);
 
 // "Elias, Parsifal" 또는"(Elias, Parsifal)" 또는 "Elias/Parsifal" → ["Elias", "Parsifal"]
+// 작품명 정규화 — 부분 이름을 정식 이름으로 통합
+// 예: "Giovanni" → "Don Giovanni", "Traviata" → "La Traviata"
+const PRODUCTION_ALIASES = {
+  "giovanni":      "Don Giovanni",
+  "don giovanni":  "Don Giovanni",
+  "traviata":      "La Traviata",
+  "la traviata":   "La Traviata",
+  "figaro":        "Le Nozze di Figaro",
+  "nozze":         "Le Nozze di Figaro",
+  "le nozze di figaro": "Le Nozze di Figaro",
+  "boheme":        "La Bohème",
+  "la boheme":     "La Bohème",
+  "la bohème":     "La Bohème",
+  "butterfly":     "Madama Butterfly",
+  "madama butterfly": "Madama Butterfly",
+  "tosca":         "Tosca",
+  "aida":          "Aida",
+  "carmen":        "Carmen",
+  "parsifal":      "Parsifal",
+  "elias":         "Elias",
+  "fidelio":       "Fidelio",
+  "lohengrin":     "Lohengrin",
+  "tannhäuser":    "Tannhäuser",
+  "tannhauser":    "Tannhäuser",
+  "tristan":       "Tristan und Isolde",
+  "tristan und isolde": "Tristan und Isolde",
+  "meistersinger": "Die Meistersinger von Nürnberg",
+  "die meistersinger": "Die Meistersinger von Nürnberg",
+  "rheingold":     "Das Rheingold",
+  "walküre":       "Die Walküre",
+  "walkure":       "Die Walküre",
+  "siegfried":     "Siegfried",
+  "götterdämmerung": "Götterdämmerung",
+  "gotterdammerung": "Götterdämmerung",
+  "salome":        "Salome",
+  "elektra":       "Elektra",
+  "rosenkavalier": "Der Rosenkavalier",
+  "der rosenkavalier": "Der Rosenkavalier",
+  "ariadne":       "Ariadne auf Naxos",
+  "fliegende holländer": "Der fliegende Holländer",
+  "hollander":     "Der fliegende Holländer",
+  "holländer":     "Der fliegende Holländer",
+  "zauberflöte":   "Die Zauberflöte",
+  "zauberflote":   "Die Zauberflöte",
+  "die zauberflöte": "Die Zauberflöte",
+  "freischütz":    "Der Freischütz",
+  "freischutz":    "Der Freischütz",
+  "karmelitinnen": "Karmelitinnen",
+  "florentiner hut": "Ein Florentiner Hut",
+  "ein florentiner hut": "Ein Florentiner Hut",
+};
+
+const normalizeProduction = (name) => {
+  if (!name) return name;
+  const key = name.trim().toLowerCase();
+  return PRODUCTION_ALIASES[key] || name.trim();
+};
+
 const splitProductions = (production) => {
   if (!production) return [];
   return production
     .replace(/[()]/g, "")
     .split(/[,/]+/)
-    .map(p => p.trim())
+    .map(p => normalizeProduction(p.trim()))
     .filter(p => p.length > 0);
 };
 
