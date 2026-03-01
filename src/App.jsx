@@ -74,25 +74,37 @@ const PRODUCTION_ALIASES = {
   "ein florentiner hut": "Ein Florentiner Hut",
 };
 
-const normalizeProduction = (name) => {
+const normalizeProduction = (name, knownProductions = []) => {
   if (!name) return name;
-  const key = name.trim().toLowerCase();
-  return PRODUCTION_ALIASES[key] || name.trim();
+  const trimmed = name.trim();
+  const key = trimmed.toLowerCase();
+  // 1. 고정 alias 먼저 확인
+  if (PRODUCTION_ALIASES[key]) return PRODUCTION_ALIASES[key];
+  // 2. 이미 알려진 작품명 중 부분 문자열 매칭
+  // 예: "giovanni" → "Don Giovanni" (Giovanni가 Don Giovanni에 포함됨)
+  const lowerTrimmed = key;
+  const match = knownProductions
+    .filter(p => p.toLowerCase() !== lowerTrimmed) // 자기 자신 제외
+    .find(p => 
+      p.toLowerCase().includes(lowerTrimmed) || // "Don Giovanni".includes("giovanni")
+      lowerTrimmed.includes(p.toLowerCase())    // 반대 방향도 체크
+    );
+  return match || trimmed;
 };
 
-const splitProductions = (production) => {
+const splitProductions = (production, knownProductions = []) => {
   if (!production) return [];
   return production
     .replace(/[()]/g, "")
     .split(/[,/]+/)
-    .map(p => normalizeProduction(p.trim()))
+    .map(p => normalizeProduction(p.trim(), knownProductions))
     .filter(p => p.length > 0);
 };
 
 // 이벤트의 작품이 내 작품 목록과 하나라도 겹치는지 확인
-const matchesMyProductions = (event, myProductions) => {
+const matchesMyProductions = (event, myProductions, knownProductions = []) => {
   if (!event.production) return true;
-  const prods = splitProductions(event.production);
+  const prods = splitProductions(event.production, knownProductions);
   return prods.some(p => myProductions.includes(p));
 };
 
@@ -1197,7 +1209,7 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
     });
     if (hasProductionFilter) {
       filtered = filtered.filter(e =>
-        isChorfrei(e) || matchesMyProductions(e, myProductions)
+        isChorfrei(e) || matchesMyProductions(e, myProductions, scheds.flatMap(e2 => splitProductions(e2.production, [])).filter(Boolean))
       );
     }
     return filtered;
@@ -2553,9 +2565,14 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
 
   const initials = user.name.split(" · ")[0].split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
 
-  // 모든 작품 목록 추출 — 복합 작품명("Elias, Parsifal", "Elias/Parsifal") 분리
+  // 모든 작품 목록 추출 — 1차: 원본 이름 수집, 2차: 부분매칭으로 정규화
+  const rawProductions = [...new Set(
+    scheds.flatMap(e => splitProductions(e.production, []))
+  )];
+  // 긴 이름 우선 (Don Giovanni가 Giovanni보다 우선)
+  const sortedByLength = [...rawProductions].sort((a, b) => b.length - a.length);
   const allProductions = [...new Set(
-    scheds.flatMap(e => splitProductions(e.production))
+    rawProductions.map(p => normalizeProduction(p, sortedByLength))
   )].sort();
 
   const myProductions = settings.myProductions || [];
