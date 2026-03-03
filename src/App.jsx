@@ -588,6 +588,11 @@ body {
 }
 .ecard:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .ecard.dimmed { opacity: 0.35; }
+[data-theme="light"] .ecard.dimmed { opacity: 1; color: var(--text2); }
+[data-theme="light"] .ecard.dimmed .ecard-title { color: var(--text2); }
+[data-theme="light"] .ecard.dimmed .ecard-prod,
+[data-theme="light"] .ecard.dimmed .ecard-meta,
+[data-theme="light"] .ecard.dimmed .ecard-target { color: var(--muted); }
 .ecard.changed { border-color: rgba(255,159,10,0.5) !important; background: rgba(255,159,10,0.08) !important; }
 .ecard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .ecard-left { flex: 1; min-width: 0; }
