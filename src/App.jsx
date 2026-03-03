@@ -1988,6 +1988,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
   const sortedScheds = [...scheds].sort((a, b) => a.date.localeCompare(b.date));
 
   // 매주 월요일 00:00 이후 지난 Probe 자동 삭제
+  const lastProbeClean = settings?.lastProbeClean || "";
   useEffect(() => {
     if (scheds.length === 0) return;
     const now = new Date();
@@ -1997,14 +1998,13 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
     lastMonday.setDate(now.getDate() - daysToMonday);
     lastMonday.setHours(0, 0, 0, 0);
     const mondayStr = fmtD(lastMonday);
-    const lastClean = settings?.lastProbeClean || "";
-    if (lastClean >= mondayStr) return;
+    if (lastProbeClean >= mondayStr) return;
     const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
     Promise.all(toDelete.map(e => deleteEvent(e.id))).then(() => {
       saveSettings({ ...settings, lastProbeClean: mondayStr });
       if (toDelete.length > 0) console.log(`[AutoClean] ${toDelete.length}개 지난 Probe 삭제`);
     });
-  }, [scheds.length, settings?.lastProbeClean]);
+  }, [scheds.length, lastProbeClean]);
 
   return (
     <div className="page">
