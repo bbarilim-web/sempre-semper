@@ -850,10 +850,10 @@ export default function App() {
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
 
   // 테마 적용
+  const currentTheme = settings?.theme || "dark";
   useEffect(() => {
-    const theme = settings?.theme || "dark";
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [settings?.theme]);
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }, [currentTheme]);
 
 
 
