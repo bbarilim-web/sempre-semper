@@ -146,18 +146,46 @@ function timeAgo(ts) {
 function bassRequired(event) {
   if (!event || !event.targetGroup) return null;
   const g = event.targetGroup.toLowerCase();
-  // Required for bass
   if (g.includes("alle herren")) return true;
   if (g.includes("alle eingeteilten") && !g.includes("damen")) return true;
   if (g.includes("alle") && !g.includes("damen") && !g.includes("sopran") && !g.includes("alt")) return true;
   if (g.includes("bass")) return true;
   if (g.includes("herren")) return true;
-  // Not required
   if (g.includes("damen") && !g.includes("herren")) return false;
   if (g.includes("blumenmädchen")) return false;
   if (g.includes("sopran") && !g.includes("bass")) return false;
   if (g.includes("alt") && !g.includes("bass")) return false;
-  return null; // unknown
+  return null;
+}
+
+// 사용자 voice/part에 따라 해당 일정인지 판단
+function isRelevantForUser(event, user) {
+  if (!event || !event.targetGroup) return true;
+  const g = event.targetGroup.toLowerCase();
+  const voice = (user?.voice || "").toLowerCase();
+  const part  = (user?.part  || "").toLowerCase();
+
+  if (g.includes("alle eingeteilten") || g === "alle" || g.includes("alle stimmgruppen")) return true;
+
+  const isFemale = voice === "sopran" || voice === "alt" ||
+                   part.includes("sopran") || part.includes("alt");
+  const isMale   = voice === "tenor" || voice === "bass" ||
+                   part.includes("tenor") || part.includes("bass");
+
+  if (g.includes("damen") || g.includes("frauen")) {
+    if (g.includes("herren")) return true;
+    return isFemale;
+  }
+  if (g.includes("herren")) {
+    if (g.includes("damen")) return true;
+    return isMale;
+  }
+  if (g.includes("sopran")) return voice === "sopran" || part.includes("sopran");
+  if (g.includes("alt"))    return voice === "alt"    || part.includes("alt");
+  if (g.includes("tenor"))  return voice === "tenor"  || part.includes("tenor");
+  if (g.includes("bass"))   return voice === "bass"   || part.includes("bass");
+
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1242,13 +1270,17 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
   const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
   const evsByDate = d => {
     const dayEvs = scheds.filter(e => e.date === d);
-    // 중복 제거: 같은 시간+제목은 더 상세한 소스 우선
+    const knownProds = [...new Set(scheds.map(e => e.production).filter(Boolean))];
+    const sortedKnown = [...knownProds].sort((a,b) => b.length - a.length);
+    // 중복 제거: production 정규화 후 같은 시간+작품은 더 상세한 소스 우선
     const deduped = Object.values(
       dayEvs.reduce((acc, e) => {
-        const key = `${e.startTime}_${e.production || e.title}`;
+        const normProd = e.production ? normalizeProduction(e.production, sortedKnown) : e.title;
+        const key = `${e.startTime}_${normProd}`;
         const existing = acc[key];
         if (!existing || (SOURCE_PRIORITY[e.sourceType] ?? 9) < (SOURCE_PRIORITY[existing.sourceType] ?? 9)) {
-          acc[key] = e;
+          // production 필드도 정규화된 이름으로 교체
+          acc[key] = { ...e, production: e.production ? normalizeProduction(e.production, sortedKnown) : e.production };
         }
         return acc;
       }, {})
@@ -1258,8 +1290,8 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
   const myFilter  = evs => {
     let filtered = showAll ? evs : evs.filter(e => {
       if (isChorfrei(e)) return true;
-      const r = bassRequired(e);
-      return isVorstellung(e) || r === true || r === null;
+      if (isVorstellung(e)) return true;
+      return isRelevantForUser(e, user);
     });
     if (hasProductionFilter) {
       filtered = filtered.filter(e =>
