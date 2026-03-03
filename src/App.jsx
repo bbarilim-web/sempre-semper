@@ -832,6 +832,18 @@ export default function App() {
   const [tab, setTab] = useState("calendar");
   const { toasts, add: toast } = useToast();
 
+  // PDF.js 동적 로드 (페이지 수 파악용)
+  useEffect(() => {
+    if (window.pdfjsLib) return;
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    };
+    document.head.appendChild(script);
+  }, []);
+
   const {
     user: authUser, profile,
     loading: authLoading,
@@ -1778,16 +1790,24 @@ function ChangesView({ scheds, notifs, user }) {
 //  PDF VIEW  — Claude API parses Semperoper schedule formats
 // ═══════════════════════════════════════════════════════════════════════
 function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
-  const [drag, setDrag] = useState(false);
-  const [parsing, setParsing] = useState(false);
-  const [parsed, setParsed] = useState(null);
-  const [error, setError] = useState("");
+  const [drag, setDrag]         = useState(false);
+  const [parsing, setParsing]   = useState(false);
+  const [parsed, setParsed]     = useState(null);
+  const [error, setError]       = useState("");
+  const [pdfFile, setPdfFile]   = useState(null);   // 업로드된 파일
+  const [pdfMeta, setPdfMeta]   = useState(null);   // { numPages, fileName }
+  const [pageFrom, setPageFrom] = useState(1);
+  const [pageTo, setPageTo]     = useState(1);
+  const [extractType, setExtractType] = useState("all"); // "all" | "vs" | "proben"
+  const [sourceTypeOverride, setSourceTypeOverride] = useState("auto"); // "auto"|"vorplanung"|"dienstplan"|"monatsplan"
   const fileRef = useRef();
 
-  const callApi = async (base64, pageHint, vsOnly) => {
-    const vsFilter = vsOnly
+  const callApi = async (base64, pageHint, vsOnly, sourceType) => {
+    const vsFilter = vsOnly === "vs"
       ? "NUR Vorstellungen (VS) extrahieren! Alle anderen Typen (GP, OHP, KHP, BP, BO, TE, Bel, KP) IGNORIEREN."
-      : "Alle Termine extrahieren.";
+      : vsOnly === "proben"
+      ? "NUR Proben extrahieren (BP, BO, GP, OHP, KHP, KP, TE, Bel). Vorstellungen (VS) IGNORIEREN."
+      : "Alle Termine extrahieren (VS, BP, BO, GP, OHP, KHP, KP, TE, Bel, chorfrei).";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1812,9 +1832,10 @@ Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks.
 Beginne direkt mit [ und ende mit ]
 
 Format:
-{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"vorplanung"}
+{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"${sourceType}"}
 
 - Wenn Uhrzeit unbekannt: "00:00"
+- sourceType immer "${sourceType}" verwenden
 - Antworte AUSSCHLIESSLICH mit dem JSON-Array`,
         messages: [{
           role: "user",
@@ -1834,39 +1855,79 @@ Format:
     return JSON.parse(match[0]);
   };
 
-  const parsePdf = async (file) => {
+  // PDF 업로드 → 페이지 수 파악 → 설정 UI 표시
+  const onFile = async (f) => {
+    if (!f || f.type !== "application/pdf") { setError("Bitte eine PDF-Datei hochladen."); return; }
+    setError(""); setParsed(null);
+    // PDF.js로 페이지 수 파악
+    try {
+      const url = URL.createObjectURL(f);
+      const pdfjsLib = window.pdfjsLib;
+      if (pdfjsLib) {
+        const pdf = await pdfjsLib.getDocument(url).promise;
+        const numPages = pdf.numPages;
+        URL.revokeObjectURL(url);
+        setPdfFile(f);
+        setPdfMeta({ numPages, fileName: f.name });
+        setPageFrom(1);
+        setPageTo(numPages);
+        // 파일명으로 기본 설정 자동 지정
+        const lname = f.name.toLowerCase();
+        if (lname.includes("vorplanung") || lname.includes("vorp")) {
+          setExtractType("vs");
+          setSourceTypeOverride("vorplanung");
+        } else if (lname.includes("monat")) {
+          setExtractType("all");
+          setSourceTypeOverride("monatsplan");
+        } else {
+          setExtractType("all");
+          setSourceTypeOverride("dienstplan");
+        }
+      } else {
+        // PDF.js 없으면 바로 분석
+        setPdfFile(f);
+        setPdfMeta({ numPages: null, fileName: f.name });
+        setPageFrom(1); setPageTo(1);
+      }
+    } catch(e) {
+      setPdfFile(f);
+      setPdfMeta({ numPages: null, fileName: f.name });
+    }
+  };
+
+  const parsePdf = async () => {
+    if (!pdfFile) return;
     setParsing(true); setError(""); setParsed(null);
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = e => res(e.target.result.split(",")[1]);
         r.onerror = () => rej(new Error("Lesefehler"));
-        r.readAsDataURL(file);
+        r.readAsDataURL(pdfFile);
       });
 
-      const isVorplanung = file.name.toLowerCase().includes("vorplanung") ||
-                           file.name.toLowerCase().includes("vorp");
+      const totalPages = pdfMeta?.numPages;
+      const pageHint = totalPages
+        ? (pageFrom === 1 && pageTo === totalPages
+            ? `alle ${totalPages} Seiten`
+            : pageFrom === pageTo
+            ? `Seite ${pageFrom}`
+            : `Seiten ${pageFrom} bis ${pageTo}`)
+        : "diesen Plan";
 
-      let allEvents = [];
-      if (isVorplanung) {
-        // Vorplanung: VS만 추출, 전체 PDF 한번에 처리
-        allEvents = await callApi(base64, "alle Seiten dieser Vorplanung (4 Seiten)", true);
-      } else {
-        allEvents = await callApi(base64, "diesen Probenplan", false);
-      }
+      const srcType = sourceTypeOverride === "auto"
+        ? (pdfFile.name.toLowerCase().includes("vorp") ? "vorplanung"
+          : pdfFile.name.toLowerCase().includes("monat") ? "monatsplan" : "dienstplan")
+        : sourceTypeOverride;
 
-      if (allEvents.length === 0) throw new Error("Keine Termine gefunden");
-      setParsed(allEvents.map(e => ({ ...e, _import: !isChorfrei(e) })));
+      const allEvents = await callApi(base64, pageHint, extractType, srcType);
+      if (allEvents.length === 0) throw new Error("Keine Termine gefunden — bitte Seitenbereich oder Typ prüfen");
+      setParsed(allEvents.map(e => ({ ...e, sourceType: srcType, _import: !isChorfrei(e) })));
     } catch (e) {
-      setError("Fehler beim Analysieren: " + e.message);
+      setError("Fehler: " + e.message);
     } finally {
       setParsing(false);
     }
-  };
-
-  const onFile = f => {
-    if (!f || f.type !== "application/pdf") { setError("Bitte eine PDF-Datei hochladen."); return; }
-    parsePdf(f);
   };
 
   const importSelected = async () => {
@@ -1920,24 +1981,165 @@ Format:
     <div className="page">
       <div className="sh"><h2>PDF Import</h2><div className="sh-sub">Dienstplan · Monatsplan · Vorplanung</div></div>
 
-      <div
-        className={`pdf-drop${drag ? " drag" : ""}`}
-        onDragOver={e => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}
-        onClick={() => fileRef.current.click()}>
-        <div className="pdf-icon">📄</div>
-        <h3>PDF-Probenplan hochladen</h3>
-        <p>Dienstplan · Monatsplan · Vorplanung · Tagesplan</p>
-        <p style={{ marginTop: 4 }}>Klicken oder per Drag & Drop</p>
-        <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
-      </div>
+      {/* ── 파일 드롭존 (파일 미선택 시만) ── */}
+      {!pdfMeta && (
+        <div
+          className={`pdf-drop${drag ? " drag" : ""}`}
+          onDragOver={e => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={e => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}
+          onClick={() => fileRef.current.click()}>
+          <div className="pdf-icon">📄</div>
+          <h3>PDF-Probenplan hochladen</h3>
+          <p>Dienstplan · Monatsplan · Vorplanung · Tagesplan</p>
+          <p style={{ marginTop: 4 }}>Klicken oder per Drag & Drop</p>
+          <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
+        </div>
+      )}
+
+      {/* ── 파일 선택됨 → 분석 설정 패널 ── */}
+      {pdfMeta && !parsed && !parsing && (
+        <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:14, padding:18, marginBottom:16 }}>
+          {/* 파일명 + 다시 선택 */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+            <span style={{ fontSize:"1.4rem" }}>📄</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:"0.88rem", fontWeight:600, color:"var(--text)", wordBreak:"break-all" }}>{pdfMeta.fileName}</div>
+              <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:2 }}>
+                {pdfMeta.numPages ? `${pdfMeta.numPages} Seiten` : "Seiten unbekannt"}
+              </div>
+            </div>
+            <button onClick={() => { setPdfMeta(null); setPdfFile(null); setError(""); }}
+              style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
+                color:"var(--muted)", padding:"4px 10px", fontSize:"0.78rem",
+                fontFamily:"var(--sans)", cursor:"pointer" }}>
+              ✕ Andere Datei
+            </button>
+          </div>
+
+          {/* 페이지 범위 선택 */}
+          {pdfMeta.numPages && pdfMeta.numPages > 1 && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
+                textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+                Seitenbereich
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                {/* 전체 선택 버튼 */}
+                <button onClick={() => { setPageFrom(1); setPageTo(pdfMeta.numPages); }}
+                  style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
+                    background: pageFrom===1 && pageTo===pdfMeta.numPages ? "var(--accent)" : "var(--s2)",
+                    color: pageFrom===1 && pageTo===pdfMeta.numPages ? "#fff" : "var(--text2)",
+                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer" }}>
+                  Alle ({pdfMeta.numPages})
+                </button>
+                {/* 페이지별 버튼 */}
+                {Array.from({length: pdfMeta.numPages}, (_, i) => i+1).map(p => (
+                  <button key={p} onClick={() => { setPageFrom(p); setPageTo(p); }}
+                    style={{ width:36, height:36, borderRadius:8, border:"1px solid var(--border)",
+                      background: pageFrom===p && pageTo===p ? "var(--accent)" : "var(--s2)",
+                      color: pageFrom===p && pageTo===p ? "#fff" : "var(--text2)",
+                      fontSize:"0.82rem", fontWeight:600, fontFamily:"var(--sans)", cursor:"pointer" }}>
+                    {p}
+                  </button>
+                ))}
+                {/* 직접 입력 */}
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:4 }}>
+                  <span style={{ fontSize:"0.74rem", color:"var(--muted)" }}>S.</span>
+                  <input type="number" min={1} max={pdfMeta.numPages} value={pageFrom}
+                    onChange={e => setPageFrom(Math.max(1, Math.min(+e.target.value, pageTo)))}
+                    style={{ width:44, padding:"4px 6px", background:"var(--s2)", border:"1px solid var(--border)",
+                      borderRadius:6, color:"var(--text)", fontSize:"0.82rem", textAlign:"center",
+                      fontFamily:"var(--sans)" }} />
+                  <span style={{ fontSize:"0.74rem", color:"var(--muted)" }}>–</span>
+                  <input type="number" min={pageFrom} max={pdfMeta.numPages} value={pageTo}
+                    onChange={e => setPageTo(Math.max(pageFrom, Math.min(+e.target.value, pdfMeta.numPages)))}
+                    style={{ width:44, padding:"4px 6px", background:"var(--s2)", border:"1px solid var(--border)",
+                      borderRadius:6, color:"var(--text)", fontSize:"0.82rem", textAlign:"center",
+                      fontFamily:"var(--sans)" }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 추출 타입 */}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
+              textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+              Extrahieren
+            </div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {[
+                ["all",    "🗓 Alle Termine"],
+                ["vs",     "🎭 Nur Vorstellungen"],
+                ["proben", "🎵 Nur Proben"],
+              ].map(([v,l]) => (
+                <button key={v} onClick={() => setExtractType(v)}
+                  style={{ padding:"6px 14px", borderRadius:8,
+                    border:`1px solid ${extractType===v ? "var(--accent)" : "var(--border)"}`,
+                    background: extractType===v ? "var(--accent-dim)" : "var(--s2)",
+                    color: extractType===v ? "var(--accent)" : "var(--text2)",
+                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer",
+                    fontWeight: extractType===v ? 600 : 400 }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 소스 타입 */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
+              textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+              Plantyp
+            </div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {[
+                ["dienstplan",  "Dienstplan"],
+                ["monatsplan",  "Monatsplan"],
+                ["vorplanung",  "Vorplanung"],
+                ["tagesplan",   "Tagesplan"],
+              ].map(([v,l]) => (
+                <button key={v} onClick={() => setSourceTypeOverride(v)}
+                  style={{ padding:"6px 14px", borderRadius:8,
+                    border:`1px solid ${sourceTypeOverride===v ? "var(--blue)" : "var(--border)"}`,
+                    background: sourceTypeOverride===v ? "rgba(46,123,219,0.12)" : "var(--s2)",
+                    color: sourceTypeOverride===v ? "var(--blue)" : "var(--text2)",
+                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer",
+                    fontWeight: sourceTypeOverride===v ? 600 : 400 }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 분석 버튼 */}
+          <button onClick={parsePdf}
+            style={{ width:"100%", padding:"12px", borderRadius:10,
+              background:"var(--accent)", border:"none", color:"#fff",
+              fontSize:"0.92rem", fontWeight:700, fontFamily:"var(--sans)",
+              cursor:"pointer", letterSpacing:"-0.01em" }}>
+            🎼 Analysieren
+            {pdfMeta.numPages && pageFrom === pageTo
+              ? ` (Seite ${pageFrom})`
+              : pdfMeta.numPages && !(pageFrom===1 && pageTo===pdfMeta.numPages)
+              ? ` (S. ${pageFrom}–${pageTo})`
+              : ""}
+          </button>
+        </div>
+      )}
 
       {parsing && (
         <div className="parsing">
           <div className="pulse" style={{ fontSize: "1.5rem", marginBottom: 8 }}>🎼</div>
-          <p>Claude analysiert den Probenplan…</p>
-          <p style={{ marginTop: 4, fontSize: "0.72rem" }}>Erkennt Stücke · Typen · Zielgruppen · Zeiten</p>
+          <p>Claude analysiert den Plan…</p>
+          <p style={{ marginTop: 4, fontSize: "0.72rem" }}>
+            {pdfMeta?.numPages && pageFrom === pageTo
+              ? `Seite ${pageFrom} von ${pdfMeta.numPages}`
+              : pdfMeta?.numPages
+              ? `Seiten ${pageFrom}–${pageTo}`
+              : "Erkennt Stücke · Typen · Zielgruppen · Zeiten"}
+          </p>
         </div>
       )}
 
@@ -1945,6 +2147,13 @@ Format:
 
       {parsed && groupedParsed && (
         <div>
+          {/* 다시 분석 버튼 */}
+          <button onClick={() => { setParsed(null); }}
+            style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
+              color:"var(--muted)", padding:"5px 12px", fontSize:"0.78rem",
+              fontFamily:"var(--sans)", cursor:"pointer", marginBottom:12 }}>
+            ← Einstellungen ändern
+          </button>
           {/* Summary */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             <div style={{ background: "#2A0808", border: "1px solid #5A1515", padding: "8px 14px", fontSize: "0.8rem" }}>
