@@ -841,6 +841,7 @@ export default function App() {
     scheds, saveScheds, deleteEvent,
     pinnwand, savePinnwand, deletePost: fbDeletePost,
     settings, saveSettings,
+    allUsers, allSettings,
   } = useFirebase();
 
   const user = profile;
@@ -995,7 +996,7 @@ export default function App() {
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
           {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} />}
         </main>
 
         <nav className="bottomnav">
@@ -2029,7 +2030,7 @@ Format:
 // ═══════════════════════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ═══════════════════════════════════════════════════════════════════════
-function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings }) {
+function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings, users, allSettings }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
   const [notifModal, setNotifModal] = useState(false);
@@ -2058,7 +2059,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
   return (
     <div className="page">
       <div className="atabs">
-        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"]].map(([v, l]) => (
+        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
           <button key={v} className={`atab${atab === v ? " on" : ""}`} onClick={() => setAtab(v)}>{l}</button>
         ))}
       </div>
@@ -2129,6 +2130,10 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
             </div>
           ))}
         </>
+      )}
+
+      {atab === "statistik" && (
+        <BesetzungsStatistik scheds={scheds} users={users || []} allSettings={allSettings || {}} />
       )}
 
       {editModal && (
@@ -2675,6 +2680,300 @@ function timeAgoShort(ts) {
 // ═══════════════════════════════════════════════════════════════════════
 //  EINSTELLUNGEN (Settings)
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+//  BESETZUNGSSTATISTIK
+// ═══════════════════════════════════════════════════════════════════════
+function BesetzungsStatistik({ scheds, users, allSettings }) {
+  const [view, setView]           = useState("summary");
+  const [selSeason, setSelSeason] = useState("all");
+  const [selProd, setSelProd]     = useState(null);
+  const [selMember, setSelMember] = useState(null);
+  const [search, setSearch]       = useState("");
+
+  const VOICE_COL = { Sopran:"#E8920A", Alt:"#2DB34A", Tenor:"#2E7BDB", Bass:"#E8173A" };
+
+  const getSeasonLabel = (date) => {
+    if (!date) return "Unbekannt";
+    const d = new Date(date + "T12:00:00");
+    const y = d.getFullYear(); const m = d.getMonth();
+    const s = m >= 7 ? y : y - 1;
+    return `${s}/${String(s+1).slice(2)}`;
+  };
+
+  const vorstellungen = scheds.filter(e => e.eventType === "Vorstellung" && e.production);
+  const seasons = ["all", ...[...new Set(vorstellungen.map(e => getSeasonLabel(e.date)))].sort().reverse()];
+  const filteredVS = selSeason === "all" ? vorstellungen
+    : vorstellungen.filter(e => getSeasonLabel(e.date) === selSeason);
+  const allProds = [...new Set(filteredVS.map(e => e.production).filter(Boolean))].sort();
+
+  // 단원별 집계 — allSettings[uid].myProductions + productionSeasons 기반
+  const memberStats = users.map(u => {
+    const uSet = allSettings[u.id] || {};
+    const myProds = uSet.myProductions || [];
+    const prodSeasons = uSet.productionSeasons || {};
+    const prodsInSeason = myProds.filter(prod => {
+      const inVS = allProds.some(p =>
+        p.toLowerCase() === prod.toLowerCase() ||
+        p.toLowerCase().includes(prod.toLowerCase()) ||
+        prod.toLowerCase().includes(p.toLowerCase())
+      );
+      if (!inVS) return false;
+      if (selSeason === "all") return true;
+      const ps = prodSeasons[prod];
+      return !ps || ps === selSeason;
+    });
+    return {
+      id: u.id,
+      name: (u.name || u.email || u.id).split(" · ")[0],
+      part: u.part || "",
+      voice: u.voice || "",
+      productions: prodsInSeason,
+      prodCount: prodsInSeason.length,
+    };
+  });
+
+  const prodStats = allProds.map(prod => {
+    const members = memberStats.filter(m =>
+      m.productions.some(p => p.toLowerCase() === prod.toLowerCase() ||
+        p.toLowerCase().includes(prod.toLowerCase()) ||
+        prod.toLowerCase().includes(p.toLowerCase()))
+    );
+    const byVoice = {};
+    members.forEach(m => { byVoice[m.voice] = (byVoice[m.voice]||0)+1; });
+    return { prod, members, byVoice, total: members.length };
+  });
+
+  const exportCSV = () => {
+    const rows = [["Name","Stimmgruppe","Stimme",...allProds,"Gesamt"]];
+    [...memberStats].sort((a,b) => {
+      const vo=["Sopran","Alt","Tenor","Bass"];
+      const vi=vo.indexOf(a.voice)-vo.indexOf(b.voice);
+      return vi!==0?vi:a.name.localeCompare(b.name);
+    }).forEach(m => {
+      const row=[m.name,m.part,m.voice];
+      allProds.forEach(prod => row.push(
+        m.productions.some(p=>p.toLowerCase()===prod.toLowerCase()||
+          p.toLowerCase().includes(prod.toLowerCase())||
+          prod.toLowerCase().includes(p.toLowerCase()))?"✓":""
+      ));
+      row.push(m.prodCount); rows.push(row);
+    });
+    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`Besetzung_${selSeason}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div style={{ paddingBottom:40 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+        <div style={{ fontFamily:"var(--serif)", fontSize:"1.05rem", fontWeight:600, color:"var(--text)" }}>Besetzungsstatistik</div>
+        <select value={selSeason} onChange={e=>{setSelSeason(e.target.value);setSelProd(null);setSelMember(null);}}
+          style={{ marginLeft:"auto", background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
+            color:"var(--text)", padding:"5px 10px", fontSize:"0.82rem", fontFamily:"var(--sans)", cursor:"pointer" }}>
+          {seasons.map(s=><option key={s} value={s}>{s==="all"?"Alle Spielzeiten":`Spielzeit ${s}`}</option>)}
+        </select>
+        <button onClick={exportCSV} style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
+          color:"var(--text)", padding:"5px 12px", fontSize:"0.82rem", fontFamily:"var(--sans)", cursor:"pointer" }}>↓ CSV</button>
+      </div>
+
+      <div style={{ display:"flex", gap:4, marginBottom:16, background:"var(--s2)", borderRadius:10, padding:4 }}>
+        {[["summary","📊 Übersicht"],["byProduction","🎭 Produktion"],["byMember","👤 Mitglied"]].map(([v,l])=>(
+          <button key={v} onClick={()=>{setView(v);setSelProd(null);setSelMember(null);setSearch("");}}
+            style={{ flex:1, padding:"7px 6px", borderRadius:8, border:"none", cursor:"pointer",
+              background:view===v?"var(--accent)":"transparent",
+              color:view===v?"#fff":"var(--text2)", fontFamily:"var(--sans)",
+              fontSize:"0.78rem", fontWeight:view===v?600:400, transition:"all 0.15s" }}>{l}</button>
+        ))}
+      </div>
+
+      {/* ── 📊 Übersicht ── */}
+      {view==="summary" && (
+        <div>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>
+              Produktionen ({allProds.length})
+            </div>
+            {allProds.length===0 && <div style={{ fontSize:"0.82rem", color:"var(--faint)", fontStyle:"italic" }}>Keine Vorstellungen.</div>}
+            {prodStats.map(({prod,total,byVoice})=>(
+              <div key={prod} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6,
+                padding:"8px 12px", background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8 }}>
+                <div style={{ flex:1, fontSize:"0.84rem", fontWeight:500, color:"var(--text)" }}>{prod}</div>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  {["Sopran","Alt","Tenor","Bass"].map(v=>byVoice[v]?(
+                    <span key={v} style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[v],
+                      background:VOICE_COL[v]+"18", borderRadius:5, padding:"2px 6px" }}>
+                      {v.slice(0,1)}{byVoice[v]}
+                    </span>
+                  ):null)}
+                  <span style={{ fontSize:"0.82rem", fontWeight:700, color:"var(--text2)", minWidth:20, textAlign:"right" }}>{total}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {["Sopran","Alt","Tenor","Bass"].map(voice=>{
+            const vm=memberStats.filter(m=>m.voice===voice).sort((a,b)=>b.prodCount-a.prodCount);
+            if(!vm.length) return null;
+            const max=Math.max(...vm.map(m=>m.prodCount),1);
+            const avg=vm.reduce((s,m)=>s+m.prodCount,0)/vm.length;
+            return (
+              <div key={voice} style={{ marginBottom:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <div style={{ fontSize:"0.88rem", fontWeight:700, color:VOICE_COL[voice] }}>{voice}</div>
+                  <div style={{ fontSize:"0.74rem", color:"var(--muted)" }}>Ø {avg.toFixed(1)} · {vm.length} Mitgl.</div>
+                </div>
+                {vm.map(m=>(
+                  <div key={m.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <div style={{ width:120, fontSize:"0.74rem", color:"var(--text2)", flexShrink:0,
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
+                    <div style={{ flex:1, height:14, background:"var(--s2)", borderRadius:3, overflow:"hidden" }}>
+                      {m.prodCount>0&&<div style={{ height:"100%", borderRadius:3, transition:"width 0.4s",
+                        width:`${(m.prodCount/max)*100}%`,
+                        background:m.prodCount===max?VOICE_COL[voice]:VOICE_COL[voice]+"99" }}/>}
+                    </div>
+                    <div style={{ width:20, textAlign:"right", fontSize:"0.76rem", flexShrink:0,
+                      fontWeight:m.prodCount===max?700:400,
+                      color:m.prodCount===max?VOICE_COL[voice]:"var(--text2)" }}>{m.prodCount}</div>
+                  </div>
+                ))}
+                <div style={{ fontSize:"0.68rem", color:"var(--faint)", marginTop:4, paddingLeft:128 }}>Ø {avg.toFixed(1)} Produktionen</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 🎭 작품별 ── */}
+      {view==="byProduction" && (
+        <div>
+          {selProd ? (
+            <>
+              <button onClick={()=>setSelProd(null)} style={{ background:"none", border:"none", color:"var(--accent)",
+                cursor:"pointer", fontFamily:"var(--sans)", fontSize:"0.82rem", marginBottom:12, padding:0 }}>← Zurück</button>
+              <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, padding:16 }}>
+                <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)", marginBottom:4 }}>{selProd}</div>
+                <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:16 }}>
+                  {prodStats.find(p=>p.prod===selProd)?.total||0} Mitglieder eingesetzt
+                </div>
+                {["Sopran","Alt","Tenor","Bass"].map(voice=>{
+                  const ms=(prodStats.find(p=>p.prod===selProd)?.members||[])
+                    .filter(m=>m.voice===voice).sort((a,b)=>a.name.localeCompare(b.name));
+                  if(!ms.length) return null;
+                  return (
+                    <div key={voice} style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[voice],
+                        textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>
+                        {voice} ({ms.length})
+                      </div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                        {ms.map(m=>(
+                          <span key={m.id} style={{ background:"var(--s2)", border:"1px solid var(--border)",
+                            borderRadius:6, padding:"3px 8px", fontSize:"0.78rem", color:"var(--text2)" }}>
+                            {m.name}{m.part&&<span style={{ fontSize:"0.68rem", color:"var(--faint)", marginLeft:4 }}>{m.part}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {prodStats.map(({prod,total,byVoice})=>(
+                <button key={prod} onClick={()=>setSelProd(prod)}
+                  style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
+                    background:"var(--s1)", border:"1px solid var(--border)",
+                    borderLeft:"3px solid var(--accent)", borderRadius:10,
+                    cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:"0.9rem", fontWeight:600, color:"var(--text)" }}>{prod}</div>
+                    <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:2 }}>
+                      {total} Mitglieder
+                      {["Sopran","Alt","Tenor","Bass"].map(v=>byVoice[v]?(
+                        <span key={v} style={{ marginLeft:6, color:VOICE_COL[v] }}>{v.slice(0,1)}{byVoice[v]}</span>
+                      ):null)}
+                    </div>
+                  </div>
+                  <span style={{ color:"var(--faint)" }}>›</span>
+                </button>
+              ))}
+              {allProds.length===0&&<div style={{ textAlign:"center", color:"var(--faint)", padding:40, fontSize:"0.88rem" }}>Keine Vorstellungen.</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 👤 단원별 ── */}
+      {view==="byMember" && (
+        <div>
+          <input placeholder="Name suchen…" value={search} onChange={e=>{setSearch(e.target.value);setSelMember(null);}}
+            style={{ width:"100%", padding:"8px 12px", background:"var(--s2)", border:"1px solid var(--border)",
+              borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem",
+              marginBottom:12, boxSizing:"border-box" }}/>
+          {selMember ? (
+            <>
+              <button onClick={()=>setSelMember(null)} style={{ background:"none", border:"none", color:"var(--accent)",
+                cursor:"pointer", fontFamily:"var(--sans)", fontSize:"0.82rem", marginBottom:12, padding:0 }}>← Zurück</button>
+              <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, padding:16 }}>
+                <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)", marginBottom:2 }}>{selMember.name}</div>
+                <div style={{ fontSize:"0.78rem", marginBottom:14, color:VOICE_COL[selMember.voice]||"var(--muted)" }}>
+                  {selMember.part} · {selMember.prodCount} Produktion{selMember.prodCount!==1?"en":""}
+                </div>
+                {selMember.productions.length===0
+                  ? <div style={{ fontSize:"0.82rem", color:"var(--faint)", fontStyle:"italic" }}>Keine Produktionen eingetragen.</div>
+                  : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {[...selMember.productions].sort().map(prod=>(
+                        <div key={prod} style={{ padding:"8px 12px", background:"var(--s2)",
+                          border:"1px solid var(--border)", borderRadius:8, fontSize:"0.84rem", color:"var(--text)" }}>{prod}</div>
+                      ))}
+                    </div>
+                }
+              </div>
+            </>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+              {["Sopran","Alt","Tenor","Bass"].map(voice=>{
+                const vm=memberStats
+                  .filter(m=>m.voice===voice&&(!search||
+                    m.name.toLowerCase().includes(search.toLowerCase())||
+                    m.part.toLowerCase().includes(search.toLowerCase())))
+                  .sort((a,b)=>b.prodCount-a.prodCount||a.name.localeCompare(b.name));
+                if(!vm.length) return null;
+                return (
+                  <div key={voice}>
+                    <div style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[voice],
+                      textTransform:"uppercase", letterSpacing:"0.08em", padding:"8px 0 4px", marginTop:4 }}>{voice}</div>
+                    {vm.map(m=>(
+                      <button key={m.id} onClick={()=>setSelMember(m)}
+                        style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", width:"100%", marginBottom:4,
+                          background:"var(--s1)", border:"1px solid var(--border)",
+                          borderLeft:`3px solid ${VOICE_COL[m.voice]||"var(--border2)"}`,
+                          borderRadius:10, cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:"0.88rem", fontWeight:600, color:"var(--text)" }}>{m.name}</div>
+                          <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:1 }}>{m.part}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:"0.9rem", fontWeight:700, color:m.prodCount>0?VOICE_COL[m.voice]:"var(--faint)" }}>{m.prodCount}</div>
+                          <div style={{ fontSize:"0.68rem", color:"var(--faint)" }}>Prod.</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
   const VIEW_OPTIONS = [
     { value:"tag",    label:"Tagesansicht" },
@@ -2697,12 +2996,35 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
 
   const myProductions = settings.myProductions || [];
 
+  const productionSeasons = settings.productionSeasons || {};
   const toggleProduction = (prod) => {
     const next = myProductions.includes(prod)
       ? myProductions.filter(p => p !== prod)
       : [...myProductions, prod];
-    saveSettings({ ...settings, myProductions: next });
+    // 시즌 라벨 없으면 기본값으로 현재 시즌
+    const curYear = new Date().getFullYear();
+    const curMonth = new Date().getMonth();
+    const seasonStart = curMonth >= 7 ? curYear : curYear - 1;
+    const defaultSeason = `${seasonStart}/${String(seasonStart+1).slice(2)}`;
+    const newSeasons = { ...productionSeasons };
+    if (!myProductions.includes(prod) && !newSeasons[prod]) {
+      newSeasons[prod] = defaultSeason;
+    }
+    saveSettings({ ...settings, myProductions: next, productionSeasons: newSeasons });
   };
+  const setProductionSeason = (prod, season) => {
+    const newSeasons = { ...productionSeasons, [prod]: season };
+    saveSettings({ ...settings, productionSeasons: newSeasons });
+  };
+  // 현재 활성 시즌 계산 (25/26 시즌은 2026-07-31 까지)
+  const getActiveSeason = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const start = m >= 7 ? y : y - 1;
+    return `${start}/${String(start+1).slice(2)}`;
+  };
+  const activeSeason = getActiveSeason();
 
   const selectAll = () => saveSettings({ ...settings, myProductions: allProductions });
   const selectNone = () => saveSettings({ ...settings, myProductions: [] });
@@ -2746,12 +3068,15 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
           </div>
         )}
 
-        {/* 헤더 행 — 왼쪽: 참여, 오른쪽: Neu dazu */}
+        {/* 헤더 행 */}
         {allProductions.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", padding:"0 14px", marginBottom:4 }}>
             <span style={{ fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Teilnahme</span>
-            <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>
-              Neu dazu ↓
+            <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em", marginRight:46 }}>
+              Spielzeit
+            </span>
+            <span style={{ fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+              Neu dazu
             </span>
           </div>
         )}
@@ -2765,20 +3090,23 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
               const next = isNeuDazu ? cur.filter(p => p !== prod) : [...cur, prod];
               saveSettings({ ...settings, neuDazuProductions: next });
             };
+            const prodSeason = productionSeasons[prod] || activeSeason;
+            // 지난 시즌(현재 활성 시즌보다 오래된) 작품은 흐리게
+            const isPastSeason = isSelected && prodSeason < activeSeason;
             return (
               <div key={prod} style={{ display:"flex", alignItems:"center", gap:0,
-                background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
-                border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
-                borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
-                borderRadius:10, overflow:"hidden" }}>
+                background: isSelected ? (isPastSeason ? "rgba(90,86,80,0.08)" : "rgba(232,23,58,0.08)") : "var(--s1)",
+                border:`1px solid ${isSelected ? (isPastSeason ? "rgba(90,86,80,0.3)" : "rgba(232,23,58,0.35)") : "var(--border)"}`,
+                borderLeft:`3px solid ${isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--border2)"}`,
+                borderRadius:10, overflow:"hidden", opacity: isPastSeason ? 0.6 : 1 }}>
                 {/* 왼쪽: 참여 체크 */}
                 <button onClick={() => toggleProduction(prod)}
                   style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
                     flex:1, background:"transparent", border:"none",
                     cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
                   <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
-                    background: isSelected ? "var(--accent)" : "var(--s2)",
-                    border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                    background: isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--s2)",
+                    border:`1px solid ${isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--border2)"}`,
                     display:"flex", alignItems:"center", justifyContent:"center" }}>
                     {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
                   </div>
@@ -2787,12 +3115,27 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
                     {prod}
                   </span>
                 </button>
+                {/* 가운데: 시즌 선택 드롭다운 (선택된 경우만) */}
+                {isSelected && (
+                  <select
+                    value={prodSeason}
+                    onChange={e => { e.stopPropagation(); setProductionSeason(prod, e.target.value); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ padding:"4px 6px", background:"var(--s2)", border:"none",
+                      borderLeft:"1px solid var(--border)", borderRight:"1px solid var(--border)",
+                      color: isPastSeason ? "var(--faint)" : "var(--text2)",
+                      fontFamily:"var(--sans)", fontSize:"0.74rem", cursor:"pointer",
+                      height:"100%", minWidth:72 }}>
+                    <option value="25/26">25/26</option>
+                    <option value="26/27">26/27</option>
+                    <option value="27/28">27/28</option>
+                  </select>
+                )}
                 {/* 오른쪽: Neu dazu 토글 (선택된 경우만) */}
                 {isSelected && (
                   <button onClick={toggleNeuDazu}
                     style={{ padding:"10px 14px", background:"transparent",
-                      borderLeft:"1px solid var(--border)",
-                      border:"none", borderLeft:"1px solid var(--border)",
+                      border:"none", borderLeft: isSelected ? "none" : "1px solid var(--border)",
                       cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center",
                       gap:6, fontFamily:"var(--sans)" }}>
                     <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,

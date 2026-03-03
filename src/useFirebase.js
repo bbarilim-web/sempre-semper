@@ -179,14 +179,50 @@ export function useSettings(uid) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  ALL USERS HOOK  — admin only, real-time
+// ═══════════════════════════════════════════════════════════════════════
+export function useAllUsers(uid, isAdmin) {
+  const [allUsers, setAllUsers] = useState([]);
+  useEffect(() => {
+    if (!uid || !isAdmin) return;
+    const unsub = onSnapshot(collection(db, COL.users), snap => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setAllUsers(data);
+    });
+    return unsub;
+  }, [uid, isAdmin]);
+  return { allUsers };
+}
+
+// ── 모든 단원의 settings 실시간 구독 (myProductions 등) ─────────────
+export function useAllSettings(uid, isAdmin) {
+  const [allSettings, setAllSettings] = useState({});
+  useEffect(() => {
+    if (!uid || !isAdmin) return;
+    const unsub = onSnapshot(collection(db, COL.settings), snap => {
+      const data = {};
+      snap.docs.forEach(d => { data[d.id] = d.data(); });
+      setAllSettings(data);
+    });
+    return unsub;
+  }, [uid, isAdmin]);
+  return { allSettings };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  COMBINED HOOK — useFirebase()
 // ═══════════════════════════════════════════════════════════════════════
 export function useFirebase() {
   const { authUser, profile, loginWithGoogle, logout, saveProfile } = useAuth();
-  const uid = authUser?.uid ?? null;
-  const { scheds, saveAllScheds, deleteEvent } = useSchedules([], uid);
+  const uid     = authUser?.uid ?? null;
+  const isAdmin = profile?.role === "admin";
+
+  const { scheds, saveAllScheds, deleteEvent }        = useSchedules([], uid);
   const { pinnwand, savePost, deletePost, updatePost } = usePinnwand([], uid);
-  const { settings, saveSettings } = useSettings(uid);
+  const { settings, saveSettings }                    = useSettings(uid);
+  const { allUsers }                                  = useAllUsers(uid, isAdmin);
+  const { allSettings }                               = useAllSettings(uid, isAdmin);
 
   const loading = authUser === undefined || (authUser !== null && profile === undefined);
 
@@ -205,5 +241,7 @@ export function useFirebase() {
     savePinnwand: (arr) => arr.forEach(p => savePost(p)),
     settings,
     saveSettings,
+    allUsers,
+    allSettings,
   };
 }
