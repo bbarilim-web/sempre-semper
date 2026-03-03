@@ -109,12 +109,22 @@ const isNeueinsteiger = (event) => {
 
 const matchesMyProductions = (event, myProductions, knownProductions = [], neuDazuProductions = []) => {
   if (!event.production) return true;
-  const prods = splitProductions(event.production, knownProductions);
-  const matchesProd = prods.some(p => myProductions.includes(p));
+
+  // 이벤트의 production을 정규화
+  const sortedKnown = [...knownProductions].sort((a, b) => b.length - a.length);
+  const rawProds = splitProductions(event.production, knownProductions);
+  const prods = rawProds.map(p => normalizeProduction(p, sortedKnown));
+
+  // myProductions도 정규화해서 비교
+  const normMyProds = myProductions.map(p => normalizeProduction(p, sortedKnown));
+  const normNeuDazu = neuDazuProductions.map(p => normalizeProduction(p, sortedKnown));
+
+  const matchesProd = prods.some(p => normMyProds.includes(p));
   if (!matchesProd) return false;
+
   // Neueinsteiger 일정은 neuDazu에 체크된 경우만 표시
   if (isNeueinsteiger(event)) {
-    return prods.some(p => neuDazuProductions.includes(p));
+    return prods.some(p => normNeuDazu.includes(p));
   }
   return true;
 };
@@ -1288,11 +1298,17 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
     return deduped.sort((a,b) => (a.startTime||"").localeCompare(b.startTime||""));
   };
   const myFilter  = evs => {
-    let filtered = showAll ? evs : evs.filter(e => {
+    // Alle 모드: targetGroup 필터와 production 필터 모두 해제
+    if (showAll) return evs;
+
+    // Meine 모드: 1) targetGroup 필터
+    let filtered = evs.filter(e => {
       if (isChorfrei(e)) return true;
       if (isVorstellung(e)) return true;
       return isRelevantForUser(e, user);
     });
+
+    // 2) production 필터
     if (hasProductionFilter) {
       filtered = filtered.filter(e =>
         isChorfrei(e) || matchesMyProductions(e, myProductions, scheds.flatMap(e2 => splitProductions(e2.production, [])).filter(Boolean), settings?.neuDazuProductions || [])
