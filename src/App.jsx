@@ -810,6 +810,12 @@ export default function App() {
   const saveAllScheds = (events) => { saveScheds(events); };
   const logout = () => { fbLogout(); setTab("calendar"); };
 
+  // 테마 적용 — 조건부 return 앞에 있어야 React 훅 규칙 준수
+  const currentTheme = settings?.theme || "dark";
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }, [currentTheme]);
+
   if (authLoading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       minHeight:"100vh", background:"#0A0A0B", gap:16 }}>
@@ -848,12 +854,6 @@ export default function App() {
 
   const isAdmin = user.role === "admin";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
-
-  // 테마 적용
-  const currentTheme = settings?.theme || "dark";
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", currentTheme);
-  }, [currentTheme]);
 
 
 
