@@ -646,7 +646,7 @@ body {
 .req-yes { background: var(--green-bg);  color: #32D74B; border: 1px solid rgba(50,215,75,0.3); }
 .req-no  { background: var(--s2);        color: var(--faint); border: 1px solid var(--border); }
 .req-unk { background: var(--orange-bg); color: #FF9F0A; border: 1px solid rgba(255,159,10,0.3); }
-.changed-tag { position: absolute; top: 10px; right: 10px; font-size: 0.66rem; font-weight: 600; background: var(--orange); color: white; padding: 2px 7px; border-radius: 5px; }
+.changed-dot { position: absolute; top: 7px; left: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 2px rgba(232,146,10,0.25); }
 .chorfrei-card { background: var(--s2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; text-align: center; font-size: 0.78rem; color: var(--faint); font-weight: 500; }
 
 /* ── Vorstellung banner ── */
@@ -983,7 +983,7 @@ export default function App() {
             </div>
             {changedCount > 0 && (
               <div title={`${changedCount} geänderte Termine`} style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,159,10,0.15)", border:"1px solid rgba(255,159,10,0.35)", borderRadius:8, padding:"3px 9px", fontSize:"0.72rem", color:"var(--orange)", fontWeight:600 }}>
-                ⚡ {changedCount} Änderung{changedCount > 1 ? "en" : ""}
+                ★ {changedCount} Änderung{changedCount > 1 ? "en" : ""}
               </div>
             )}
             <button className="btn-logout" onClick={logout}>Abmelden</button>
@@ -1227,7 +1227,7 @@ function EvCard({ e, user, compact = false, changed = false }) {
   return (
     <div className={`ecard${dimmed ? " dimmed" : ""}${changed ? " changed" : ""}`}
       style={{ background: st.bg, borderColor: st.border, borderLeftColor: st.leftBorder }}>
-      {changed && <div className="changed-tag">⚡ geändert</div>}
+      {changed && <div className="changed-dot" title="Geändert" />}
 
       <div className="ecard-head">
         <div className="ecard-left">
@@ -1426,7 +1426,7 @@ function WeekView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate })
                 {dd.getDate()}
               </span>
               <span style={{ fontSize:"0.78rem", color:"var(--muted)" }}>{MONTHS_DE[dd.getMonth()].slice(0,3)}</span>
-              {evs.some(isChanged) && <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"var(--orange)", fontWeight:700 }}>⚡ geändert</span>}
+              {evs.some(isChanged) && <span style={{ marginLeft:"auto", fontSize:"0.78rem", color:"var(--orange)" }}>★</span>}
             </div>
             {evs.length === 0
               ? <div style={{ fontSize:"0.8rem", color:"var(--faint)", padding:"6px 0 4px", fontStyle:"italic" }}>Kein Termin</div>
