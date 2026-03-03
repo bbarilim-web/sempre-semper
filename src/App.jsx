@@ -2697,6 +2697,15 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
           </div>
         )}
 
+        {/* 헤더 행 — 왼쪽: 참여, 오른쪽: Neu dazu */}
+        {allProductions.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", padding:"0 14px", marginBottom:4 }}>
+            <span style={{ fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Teilnahme</span>
+            <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+              Neu dazu ↓
+            </span>
+          </div>
+        )}
         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
           {allProductions.map(prod => {
             const isSelected = myProductions.includes(prod);
@@ -2708,16 +2717,16 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
               saveSettings({ ...settings, neuDazuProductions: next });
             };
             return (
-              <div key={prod} style={{ display:"flex", flexDirection:"column" }}>
+              <div key={prod} style={{ display:"flex", alignItems:"center", gap:0,
+                background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
+                border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
+                borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                borderRadius:10, overflow:"hidden" }}>
+                {/* 왼쪽: 참여 체크 */}
                 <button onClick={() => toggleProduction(prod)}
                   style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
-                    background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
-                    border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
-                    borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
-                    borderRadius: isSelected ? "10px 10px 0 0" : 10,
-                    borderBottom: isSelected ? "none" : undefined,
-                    cursor:"pointer", transition:"all 0.15s", textAlign:"left",
-                    fontFamily:"var(--sans)", width:"100%" }}>
+                    flex:1, background:"transparent", border:"none",
+                    cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
                   <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
                     background: isSelected ? "var(--accent)" : "var(--s2)",
                     border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
@@ -2729,25 +2738,20 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
                     {prod}
                   </span>
                 </button>
+                {/* 오른쪽: Neu dazu 토글 (선택된 경우만) */}
                 {isSelected && (
                   <button onClick={toggleNeuDazu}
-                    style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 14px 7px 42px",
-                      background: isNeuDazu ? "rgba(46,123,219,0.1)" : "var(--s2)",
-                      border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
-                      borderTop:"1px solid var(--border)",
-                      borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
-                      borderRadius:"0 0 10px 10px",
-                      cursor:"pointer", transition:"all 0.15s", textAlign:"left",
-                      fontFamily:"var(--sans)", width:"100%" }}>
-                    <div style={{ width:14, height:14, borderRadius:3, flexShrink:0,
+                    style={{ padding:"10px 14px", background:"transparent",
+                      borderLeft:"1px solid var(--border)",
+                      border:"none", borderLeft:"1px solid var(--border)",
+                      cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center",
+                      gap:6, fontFamily:"var(--sans)" }}>
+                    <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
                       background: isNeuDazu ? "var(--blue)" : "var(--s3)",
                       border:`1px solid ${isNeuDazu ? "var(--blue)" : "var(--border2)"}`,
                       display:"flex", alignItems:"center", justifyContent:"center" }}>
                       {isNeuDazu && <span style={{ color:"white", fontSize:"0.6rem", fontWeight:700 }}>✓</span>}
                     </div>
-                    <span style={{ fontSize:"0.78rem", color: isNeuDazu ? "var(--blue)" : "var(--muted)" }}>
-                      Neu dazu
-                    </span>
                   </button>
                 )}
               </div>
