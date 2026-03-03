@@ -425,10 +425,10 @@ const CSS = `
   --s3:         #E4E2DC;
   --border:     #D8D4CC;
   --border2:    #C8C4BC;
-  --text:       #1A1814;
-  --text2:      #4A4640;
-  --muted:      #7A7670;
-  --faint:      #B0ACA4;
+  --text:       #0A0A0B;
+  --text2:      #1A1814;
+  --muted:      #2A2824;
+  --faint:      #5A5650;
   --accent:     #C8102E;
   --accent2:    #E8173A;
   --accent-dim: rgba(200,16,46,0.1);
