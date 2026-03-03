@@ -1802,12 +1802,67 @@ function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
   const [sourceTypeOverride, setSourceTypeOverride] = useState("auto"); // "auto"|"vorplanung"|"dienstplan"|"monatsplan"
   const fileRef = useRef();
 
-  const callApi = async (base64, pageHint, vsOnly, sourceType) => {
+  // Vorplanung 페이지별 월 매핑
+  const VORPLANUNG_PAGE_MONTHS = {
+    1: [{ month: 8,  year: null, startDay: 27 },  // Aug (27일부터)
+        { month: 9,  year: null, startDay: 1  },  // Sep
+        { month: 10, year: null, startDay: 1  }], // Oct
+    2: [{ month: 11, year: null, startDay: 1  },  // Nov
+        { month: 12, year: null, startDay: 1  },  // Dec
+        { month: 1,  year: +1,   startDay: 1  }], // Jan (+1년)
+    3: [{ month: 2,  year: +1,   startDay: 1  },  // Feb
+        { month: 3,  year: +1,   startDay: 1  },  // Mar
+        { month: 4,  year: +1,   startDay: 1  }], // Apr
+    4: [{ month: 5,  year: +1,   startDay: 1  },  // May
+        { month: 6,  year: +1,   startDay: 1  },  // Jun
+        { month: 7,  year: +1,   startDay: 1  }], // Jul
+  };
+
+  const callApi = async (base64, pageHint, vsOnly, sourceType, pageNum) => {
     const vsFilter = vsOnly === "vs"
       ? "NUR Vorstellungen (VS) extrahieren! Alle anderen Typen (GP, OHP, KHP, BP, BO, TE, Bel, KP) IGNORIEREN."
       : vsOnly === "proben"
       ? "NUR Proben extrahieren (BP, BO, GP, OHP, KHP, KP, TE, Bel). Vorstellungen (VS) IGNORIEREN."
       : "Alle Termine extrahieren (VS, BP, BO, GP, OHP, KHP, KP, TE, Bel, chorfrei).";
+
+    // Vorplanung: 페이지별 월 정보를 프롬프트에 명시
+    const isVorplanung = sourceType === "vorplanung";
+    const pageMonths = isVorplanung && pageNum ? VORPLANUNG_PAGE_MONTHS[pageNum] : null;
+
+    // 기준 시즌 연도 계산 (Vorplanung 파일의 첫 해)
+    const now = new Date();
+    const seasonStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+
+    let layoutInstructions = "";
+    if (isVorplanung && pageMonths) {
+      const monthNames = ["","Januar","Februar","März","April","Mai","Juni",
+        "Juli","August","September","Oktober","November","Dezember"];
+      const monthDetails = pageMonths.map((m, i) => {
+        const y = seasonStart + (m.year || 0);
+        const startNote = m.startDay > 1 ? ` (ab dem ${m.startDay}.)` : "";
+        return `  Spalte ${i+1}: ${monthNames[m.month]} ${y}${startNote}`;
+      }).join("\n");
+
+      layoutInstructions = `
+WICHTIG — LAYOUT DIESER VORPLANUNG-SEITE:
+Diese Seite hat 3 Monatsspalten nebeneinander:
+${monthDetails}
+
+Zeilenstruktur pro Tag:
+- Jede Zeile beginnt mit der Tagesnummer (z.B. "1.", "15.")
+- Pro Tag gibt es 1-2 Zeitangaben: Vormittagstermin und Abendtermin
+- Format: "HH Termintyp Stückname" (z.B. "10 BP Zauberflöte" oder "19 VS Carmen")
+- "cf" oder "frei" = chorfrei
+
+KRITISCH für die Datumszuordnung:
+- Die Tagesnummern 1-31 gelten IMMER für die Spalte, in der sie stehen
+- Spalte 1 = ${monthNames[pageMonths[0].month]} ${seasonStart + (pageMonths[0].year||0)}${pageMonths[0].startDay > 1 ? " (erst ab " + pageMonths[0].startDay + ".)" : ""}
+- Spalte 2 = ${monthNames[pageMonths[1].month]} ${seasonStart + (pageMonths[1].year||0)}
+- Spalte 3 = ${monthNames[pageMonths[2].month]} ${seasonStart + (pageMonths[2].year||0)}
+- Weise jede Tagesnummer dem RICHTIGEN Monat und Jahr zu!
+- Seite 1: August beginnt erst am 27. (nicht 1.)`;
+    }
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1820,28 +1875,38 @@ function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
         model: "claude-sonnet-4-20250514",
         max_tokens: 16000,
         system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
-Du analysierst Proben- und Spielpläne und extrahierst Termine.
+Du analysierst Proben- und Spielpläne und extrahierst Termine präzise.
 
 Abkürzungen: VS=Vorstellung, BP=Bühnenprobe, BO=Bühnenorchesterprobe, GP=Generalprobe,
 KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung,
-Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei
+Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei, TP=Tonprobe, Ab=Abnahme, Auf=Aufnahme
+${layoutInstructions}
 
 ${vsFilter}
 
 Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks.
 Beginne direkt mit [ und ende mit ]
 
-Format:
+Format je Termin:
 {"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"${sourceType}"}
 
-- Wenn Uhrzeit unbekannt: "00:00"
-- sourceType immer "${sourceType}" verwenden
+eventType-Mapping:
+VS → "Vorstellung", BP → "Bühnenprobe", BO → "Bühnenorchesterprobe",
+GP → "Generalprobe", OHP → "Orchesterhauptprobe", KHP → "Kleines Hauptprobe",
+KP → "Konzertprobe", TE → "Toneinspielung", Bel → "Beleuchtungsprobe",
+cf/frei → "Chorfrei", TP → "Tonprobe"
+
+- Uhrzeit als "HH:MM" (z.B. "19" → "19:00", "19.30" → "19:30")
+- endTime immer "00:00" wenn nicht angegeben
+- sourceType immer "${sourceType}"
+- location: VS/GP/OHP/BO → "Bühne", BP → "Bühne", KP/TE → "Probensaal"
+- targetGroup: "Alle Eingeteilten" wenn nicht anders angegeben
 - Antworte AUSSCHLIESSLICH mit dem JSON-Array`,
         messages: [{
           role: "user",
           content: [
             { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-            { type: "text", text: `Analysiere ${pageHint} und extrahiere die Termine als JSON-Array.` }
+            { type: "text", text: `Analysiere ${pageHint} und extrahiere ALLE Termine als JSON-Array. Achte besonders auf die korrekte Zuordnung der Tagesnummern zu den richtigen Monaten und Jahren!` }
           ]
         }]
       })
@@ -1849,7 +1914,7 @@ Format:
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || "API-Fehler");
     const raw = data.content.map(c => c.text || "").join("");
-    const clean = raw.replace(/```json|```/g, "").trim();
+    const clean = raw.replace(/\`\`\`json|\`\`\`/g, "").trim();
     const match = clean.match(/\[[\s\S]*\]/);
     if (!match) return [];
     return JSON.parse(match[0]);
@@ -1920,7 +1985,7 @@ Format:
           : pdfFile.name.toLowerCase().includes("monat") ? "monatsplan" : "dienstplan")
         : sourceTypeOverride;
 
-      const allEvents = await callApi(base64, pageHint, extractType, srcType);
+      const allEvents = await callApi(base64, pageHint, extractType, srcType, pageFrom === pageTo ? pageFrom : null);
       if (allEvents.length === 0) throw new Error("Keine Termine gefunden — bitte Seitenbereich oder Typ prüfen");
       setParsed(allEvents.map(e => ({ ...e, sourceType: srcType, _import: !isChorfrei(e) })));
     } catch (e) {
