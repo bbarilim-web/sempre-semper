@@ -588,7 +588,10 @@ body {
 }
 .ecard:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .ecard.dimmed { opacity: 0.35; }
-[data-theme="light"] .ecard.dimmed { opacity: 0.7; }
+[data-theme="light"] .ecard.dimmed { opacity: 1; }
+[data-theme="light"] .ecard.dimmed .ecard-prod,
+[data-theme="light"] .ecard.dimmed .ecard-meta,
+[data-theme="light"] .ecard.dimmed .ecard-target { color: var(--muted); }
 [data-theme="light"] .ecard .ecard-title { color: var(--text) !important; }
 [data-theme="light"] .ecard .ecard-prod,
 [data-theme="light"] .ecard .ecard-meta,
