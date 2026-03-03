@@ -588,10 +588,7 @@ body {
 }
 .ecard:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .ecard.dimmed { opacity: 0.35; }
-[data-theme="light"] .ecard.dimmed { opacity: 1; }
-[data-theme="light"] .ecard.dimmed .ecard-prod,
-[data-theme="light"] .ecard.dimmed .ecard-meta,
-[data-theme="light"] .ecard.dimmed .ecard-target { color: var(--muted); }
+[data-theme="light"] .ecard.dimmed { opacity: 0.7; }
 [data-theme="light"] .ecard .ecard-title { color: var(--text) !important; }
 [data-theme="light"] .ecard .ecard-prod,
 [data-theme="light"] .ecard .ecard-meta,
@@ -1738,6 +1735,56 @@ function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
   const [error, setError] = useState("");
   const fileRef = useRef();
 
+  const callApi = async (base64, pageHint, vsOnly) => {
+    const vsFilter = vsOnly
+      ? "NUR Vorstellungen (VS) extrahieren! Alle anderen Typen (GP, OHP, KHP, BP, BO, TE, Bel, KP) IGNORIEREN."
+      : "Alle Termine extrahieren.";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 16000,
+        system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
+Du analysierst Proben- und Spielpläne und extrahierst Termine.
+
+Abkürzungen: VS=Vorstellung, BP=Bühnenprobe, BO=Bühnenorchesterprobe, GP=Generalprobe,
+KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung,
+Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei
+
+${vsFilter}
+
+Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks.
+Beginne direkt mit [ und ende mit ]
+
+Format:
+{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"vorplanung"}
+
+- Wenn Uhrzeit unbekannt: "00:00"
+- Antworte AUSSCHLIESSLICH mit dem JSON-Array`,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: `Analysiere ${pageHint} und extrahiere die Termine als JSON-Array.` }
+          ]
+        }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || "API-Fehler");
+    const raw = data.content.map(c => c.text || "").join("");
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const match = clean.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    return JSON.parse(match[0]);
+  };
+
   const parsePdf = async (file) => {
     setParsing(true); setError(""); setParsed(null);
     try {
@@ -1748,73 +1795,19 @@ function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
         r.readAsDataURL(file);
       });
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 16000,
-          system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
-Du analysierst Dienstpläne der Oper und extrahierst alle Termine.
+      const isVorplanung = file.name.toLowerCase().includes("vorplanung") ||
+                           file.name.toLowerCase().includes("vorp");
 
-Die Pläne können verschiedene Formate haben:
-- Dienstplan (wöchentlich): enthält Zeit, Ort, Stückname, Zielgruppe, Dirigent
-- Monatsplan: zwei Spalten (morgens/abends) mit Abkürzungen
-- Vorplanung (saisonal): sehr kompakt, Abkürzungen. Hier NUR Vorstellungen (VS), Generalproben (GP), Orchesterhauptproben (OHP) und Kleines Hauptproben (KHP) extrahieren - keine Beleuchtungsproben oder Toneinspielungen.
-- Tagesplan: sehr detailliert mit Minutenangaben
+      let allEvents = [];
+      if (isVorplanung) {
+        // Vorplanung: VS만 추출, 전체 PDF 한번에 처리
+        allEvents = await callApi(base64, "alle Seiten dieser Vorplanung (4 Seiten)", true);
+      } else {
+        allEvents = await callApi(base64, "diesen Probenplan", false);
+      }
 
-Abkürzungen:
-VS=Vorstellung, BP=Bühnenprobe, BO=Bühnenorchesterprobe, GP=Generalprobe, 
-KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung, 
-Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei, szen=Szenische Probe, mus=Musikalische Probe
-
-Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks, kein Text davor oder danach.
-Beginne direkt mit [ und ende mit ]
-
-Format jedes Eintrags:
-{
-  "date": "YYYY-MM-DD",
-  "startTime": "HH:MM",
-  "endTime": "00:00",
-  "eventType": "Vorstellung|Generalprobe|Bühnenprobe|Bühnenorchesterprobe|Orchesterhauptprobe|Kleines Hauptprobe|Musikalische Probe|Szenische Probe|Chorfrei|Halber Chorfrei|Toneinspielung|Beleuchtungsprobe",
-  "title": "Titel",
-  "production": "Name des Stücks",
-  "location": "Bühne",
-  "targetGroup": "Alle Eingeteilten",
-  "conductor": "",
-  "note": "",
-  "sourceType": "vorplanung"
-}
-
-Wichtig: 
-- Wenn Uhrzeit unbekannt, nutze "00:00"
-- Bei Vorplanung: sourceType="vorplanung", nur wichtige Termine (VS/GP/OHP/KHP)
-- Antworte AUSSCHLIESSLICH mit dem JSON-Array, absolut kein anderer Text`,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-              { type: "text", text: `Bitte analysiere diesen Probenplan der Staatsoper Dresden und extrahiere ALLE Termine als JSON-Array. Erkenne automatisch ob es ein Dienstplan, Monatsplan, Vorplanung oder Tagesplan ist.` }
-            ]
-          }]
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "API-Fehler");
-
-      const raw = data.content.map(c => c.text || "").join("");
-      const clean = raw.replace(/```json|```/g, "").trim();
-      // Extract JSON array even if there's extra text
-      const match = clean.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("Kein JSON-Array in der Antwort gefunden");
-      const events = JSON.parse(match[0]);
-      setParsed(events.map(e => ({ ...e, _import: !isChorfrei(e) })));
+      if (allEvents.length === 0) throw new Error("Keine Termine gefunden");
+      setParsed(allEvents.map(e => ({ ...e, _import: !isChorfrei(e) })));
     } catch (e) {
       setError("Fehler beim Analysieren: " + e.message);
     } finally {
