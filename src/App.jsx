@@ -102,10 +102,21 @@ const splitProductions = (production, knownProductions = []) => {
 };
 
 // 이벤트의 작품이 내 작품 목록과 하나라도 겹치는지 확인
-const matchesMyProductions = (event, myProductions, knownProductions = []) => {
+const isNeueinsteiger = (event) => {
+  const tg = (event.targetGroup || "").toLowerCase();
+  return tg.includes("neueinsteiger") || tg.includes("neueinsteigerinnen") || tg.includes("neueinsteiger*innen");
+};
+
+const matchesMyProductions = (event, myProductions, knownProductions = [], neuDazuProductions = []) => {
   if (!event.production) return true;
   const prods = splitProductions(event.production, knownProductions);
-  return prods.some(p => myProductions.includes(p));
+  const matchesProd = prods.some(p => myProductions.includes(p));
+  if (!matchesProd) return false;
+  // Neueinsteiger 일정은 neuDazu에 체크된 경우만 표시
+  if (isNeueinsteiger(event)) {
+    return prods.some(p => neuDazuProductions.includes(p));
+  }
+  return true;
 };
 
 const fmtD = d => d.toISOString().split("T")[0];
@@ -404,6 +415,38 @@ const CSS = `
   --shadow-lg:  0 20px 60px rgba(0,0,0,0.8);
   --serif:      'Playfair Display', Georgia, serif;
   --sans:       'DM Sans', -apple-system, sans-serif;
+}
+
+/* ── 라이트 테마 ── */
+[data-theme="light"] {
+  --bg:         #F5F4F0;
+  --s1:         #FFFFFF;
+  --s2:         #EEECE8;
+  --s3:         #E4E2DC;
+  --border:     #D8D4CC;
+  --border2:    #C8C4BC;
+  --text:       #1A1814;
+  --text2:      #4A4640;
+  --muted:      #7A7670;
+  --faint:      #B0ACA4;
+  --accent:     #C8102E;
+  --accent2:    #E8173A;
+  --accent-dim: rgba(200,16,46,0.1);
+  --accent-border: rgba(200,16,46,0.3);
+  --red:        #C8102E;
+  --red-bg:     rgba(200,16,46,0.08);
+  --red-border: rgba(200,16,46,0.25);
+  --orange:     #C47A0A;
+  --orange-bg:  rgba(196,122,10,0.1);
+  --green:      #1A8A36;
+  --green-bg:   rgba(26,138,54,0.1);
+  --blue:       #1A5FB4;
+  --blue-bg:    rgba(26,95,180,0.1);
+  --gold:       #A07830;
+  --gold-bg:    rgba(160,120,48,0.1);
+  --shadow:     0 1px 6px rgba(0,0,0,0.12);
+  --shadow-md:  0 8px 32px rgba(0,0,0,0.15);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,0.2);
 }
 
 body {
@@ -805,6 +848,12 @@ export default function App() {
 
   const isAdmin = user.role === "admin";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
+
+  // 테마 적용
+  useEffect(() => {
+    const theme = settings?.theme || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [settings?.theme]);
 
 
 
@@ -1209,7 +1258,7 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
     });
     if (hasProductionFilter) {
       filtered = filtered.filter(e =>
-        isChorfrei(e) || matchesMyProductions(e, myProductions, scheds.flatMap(e2 => splitProductions(e2.production, [])).filter(Boolean))
+        isChorfrei(e) || matchesMyProductions(e, myProductions, scheds.flatMap(e2 => splitProductions(e2.production, [])).filter(Boolean), settings?.neuDazuProductions || [])
       );
     }
     return filtered;
@@ -2651,25 +2700,57 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
           {allProductions.map(prod => {
             const isSelected = myProductions.includes(prod);
+            const isNeuDazu = (settings.neuDazuProductions || []).includes(prod);
+            const toggleNeuDazu = (e) => {
+              e.stopPropagation();
+              const cur = settings.neuDazuProductions || [];
+              const next = isNeuDazu ? cur.filter(p => p !== prod) : [...cur, prod];
+              saveSettings({ ...settings, neuDazuProductions: next });
+            };
             return (
-              <button key={prod} onClick={() => toggleProduction(prod)}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
-                  background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
-                  border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
-                  borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
-                  borderRadius:10, cursor:"pointer", transition:"all 0.15s", textAlign:"left",
-                  fontFamily:"var(--sans)" }}>
-                <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
-                  background: isSelected ? "var(--accent)" : "var(--s2)",
-                  border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
-                  display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
-                </div>
-                <span style={{ fontSize:"0.88rem", fontWeight: isSelected ? 600 : 400,
-                  color: isSelected ? "var(--text)" : "var(--text2)" }}>
-                  {prod}
-                </span>
-              </button>
+              <div key={prod} style={{ display:"flex", flexDirection:"column" }}>
+                <button onClick={() => toggleProduction(prod)}
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
+                    background: isSelected ? "rgba(232,23,58,0.08)" : "var(--s1)",
+                    border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
+                    borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                    borderRadius: isSelected ? "10px 10px 0 0" : 10,
+                    borderBottom: isSelected ? "none" : undefined,
+                    cursor:"pointer", transition:"all 0.15s", textAlign:"left",
+                    fontFamily:"var(--sans)", width:"100%" }}>
+                  <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
+                    background: isSelected ? "var(--accent)" : "var(--s2)",
+                    border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize:"0.88rem", fontWeight: isSelected ? 600 : 400,
+                    color: isSelected ? "var(--text)" : "var(--text2)" }}>
+                    {prod}
+                  </span>
+                </button>
+                {isSelected && (
+                  <button onClick={toggleNeuDazu}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 14px 7px 42px",
+                      background: isNeuDazu ? "rgba(46,123,219,0.1)" : "var(--s2)",
+                      border:`1px solid ${isSelected ? "rgba(232,23,58,0.35)" : "var(--border)"}`,
+                      borderTop:"1px solid var(--border)",
+                      borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                      borderRadius:"0 0 10px 10px",
+                      cursor:"pointer", transition:"all 0.15s", textAlign:"left",
+                      fontFamily:"var(--sans)", width:"100%" }}>
+                    <div style={{ width:14, height:14, borderRadius:3, flexShrink:0,
+                      background: isNeuDazu ? "var(--blue)" : "var(--s3)",
+                      border:`1px solid ${isNeuDazu ? "var(--blue)" : "var(--border2)"}`,
+                      display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {isNeuDazu && <span style={{ color:"white", fontSize:"0.6rem", fontWeight:700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize:"0.78rem", color: isNeuDazu ? "var(--blue)" : "var(--muted)" }}>
+                      Neu dazu
+                    </span>
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -2678,6 +2759,32 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
       {/* Darstellung */}
       <div className="settings-section">
         <div className="settings-title">Darstellung</div>
+
+        {/* 테마 선택 */}
+        <div className="settings-row" style={{ marginBottom:12 }}>
+          <div>
+            <div className="settings-row-label">Farbschema</div>
+            <div className="settings-row-sub">Helles oder dunkles Design</div>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+          {[
+            { value:"dark",  label:"🌙 Dark",  desc:"Dunkler Hintergrund" },
+            { value:"light", label:"☀️ Light", desc:"Heller Hintergrund" },
+          ].map(t => {
+            const isActive = (settings.theme || "dark") === t.value;
+            return (
+              <button key={t.value} onClick={() => saveSettings({ ...settings, theme: t.value })}
+                style={{ flex:1, padding:"12px 10px", borderRadius:10, cursor:"pointer",
+                  border:`2px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+                  background: isActive ? "var(--accent-dim)" : "var(--s1)",
+                  fontFamily:"var(--sans)", transition:"all 0.15s" }}>
+                <div style={{ fontSize:"1.1rem", marginBottom:4 }}>{t.label}</div>
+                <div style={{ fontSize:"0.72rem", color: isActive ? "var(--accent)" : "var(--muted)" }}>{t.desc}</div>
+              </button>
+            );
+          })}
+        </div>
 
         <div className="settings-row">
           <div>
