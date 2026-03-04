@@ -672,15 +672,37 @@ body {
 .wk-label { font-size: 0.68rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 
 /* ── Vorstellung only view ── */
-.vs-month { margin-bottom: 24px; }
-.vs-month-title { font-size: 0.78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 0; border-bottom: 2px solid var(--border); margin-bottom: 8px; }
+.vs-month-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; }
+.vs-month-tab { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--s1);
+  color: var(--text2); font-size: 0.76rem; font-family: var(--sans); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.vs-month-tab:hover { border-color: var(--accent); color: var(--text); }
+.vs-month-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.vs-month-tab .tab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 5px; opacity: 0.8; }
+.vs-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+.vs-cal-dow { font-size: 0.6rem; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.vs-cal-cell { min-height: 52px; padding: 4px 5px; border-radius: 7px; background: var(--s1); border: 1px solid var(--border); }
+.vs-cal-cell.empty { background: transparent; border-color: transparent; }
+.vs-cal-cell.today { border-color: var(--accent) !important; }
+.vs-cal-cell.today .vs-cal-dn { color: var(--accent); font-weight: 700; }
+.vs-cal-cell.has-ev { background: rgba(232,23,58,0.07); border-color: rgba(232,23,58,0.3); cursor: pointer; }
+.vs-cal-cell.has-ev:hover { background: rgba(232,23,58,0.13); }
+.vs-cal-cell.has-gp { background: rgba(255,159,10,0.08); border-color: rgba(255,159,10,0.35); cursor: pointer; }
+.vs-cal-cell.has-gp:hover { background: rgba(255,159,10,0.15); }
+.vs-cal-cell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vs-cal-dn { font-size: 0.68rem; font-weight: 500; color: var(--muted); margin-bottom: 2px; }
+.vs-cal-cell.has-ev .vs-cal-dn, .vs-cal-cell.has-gp .vs-cal-dn { color: var(--text); font-weight: 700; }
+.vs-cal-prods { display: flex; flex-direction: column; gap: 1px; }
+.vs-cal-prod { font-size: 0.58rem; font-weight: 600; line-height: 1.25; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--red); }
+.vs-cal-prod.gp { color: var(--orange); }
+.vs-cal-time { font-size: 0.56rem; color: var(--muted); }
+.vs-detail { margin-top: 14px; background: var(--s1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.vs-detail-hdr { padding: 10px 14px; background: var(--s2); font-weight: 700; font-size: 0.84rem; color: var(--text); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .vs-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; margin-bottom: 6px;
-  background: var(--s1); border: 1px solid var(--red-border);
-  border-left: 3px solid var(--red); border-radius: 10px;
-  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
 }
+.vs-row:last-child { border-bottom: none; }
 .vs-row-date { font-size: 0.8rem; color: var(--muted); white-space: nowrap; min-width: 52px; font-weight: 500; }
 .vs-row-title { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--text); }
 .vs-row-time { font-size: 0.8rem; font-weight: 600; color: var(--text2); white-space: nowrap; }
@@ -832,18 +854,6 @@ export default function App() {
   const [tab, setTab] = useState("calendar");
   const { toasts, add: toast } = useToast();
 
-  // PDF.js 동적 로드 (페이지 수 파악용)
-  useEffect(() => {
-    if (window.pdfjsLib) return;
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    script.onload = () => {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    };
-    document.head.appendChild(script);
-  }, []);
-
   const {
     user: authUser, profile,
     loading: authLoading,
@@ -853,7 +863,6 @@ export default function App() {
     scheds, saveScheds, deleteEvent,
     pinnwand, savePinnwand, deletePost: fbDeletePost,
     settings, saveSettings,
-    allUsers, allSettings,
   } = useFirebase();
 
   const user = profile;
@@ -1008,7 +1017,7 @@ export default function App() {
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
           {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} />}
         </main>
 
         <nav className="bottomnav">
@@ -1652,85 +1661,182 @@ function ListView({ scheds, user }) {
 //  VORSTELLUNG VIEW  ←  핵심 기능: 공연 일정만 보기
 // ═══════════════════════════════════════════════════════════════════════
 function VorstellungView({ scheds, user }) {
-  // 중복 제거: 같은 날짜+시간+제목은 하나만 (더 상세한 sourceType 우선)
+  const [selMonth, setSelMonth] = useState(null); // "YYYY-MM"
+  const [selDate, setSelDate]   = useState(null); // "YYYY-MM-DD"
+
+  // 중복 제거
   const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
-  const deduped = Object.values(
+  const vorstellungen = Object.values(
     scheds
       .filter(e => isVorstellung(e) || e.eventType === "Generalprobe")
-      .filter(e => e.date >= todayStr)
       .reduce((acc, e) => {
         const key = `${e.date}_${e.startTime}_${e.production || e.title}`;
-        const existing = acc[key];
-        if (!existing || (SOURCE_PRIORITY[e.sourceType] ?? 9) < (SOURCE_PRIORITY[existing.sourceType] ?? 9)) {
-          acc[key] = e;
-        }
+        const ex = acc[key];
+        if (!ex || (SOURCE_PRIORITY[e.sourceType]??9) < (SOURCE_PRIORITY[ex.sourceType]??9)) acc[key] = e;
         return acc;
       }, {})
-  );
+  ).sort((a,b) => (a.date+(a.startTime||"")).localeCompare(b.date+(b.startTime||"")));
 
-  const vorstellungen = deduped
-    .sort((a, b) => (a.date + (a.startTime || "")).localeCompare(b.date + (b.startTime || "")));
-
-  // Group by month
+  // 달별 그룹
   const months = {};
   vorstellungen.forEach(e => {
-    const k = e.date.slice(0, 7);
+    const k = e.date.slice(0,7);
     if (!months[k]) months[k] = [];
     months[k].push(e);
   });
-
-  // Build complete date list to show free gaps
   const allMonthKeys = Object.keys(months).sort();
+
+  // 초기 selMonth = 현재 달 또는 첫 달
+  const curMk = todayStr.slice(0,7);
+  const activeMk = selMonth || (allMonthKeys.includes(curMk) ? curMk : allMonthKeys[0]);
+
+  // 다음 공연
+  const next = vorstellungen.find(e => e.date >= todayStr);
+  const daysUntil = next ? Math.ceil((new Date(next.date+"T12:00:00") - today) / 86400000) : null;
+
+  // 선택된 달 달력 데이터
+  const calEvs = activeMk ? (months[activeMk] || []) : [];
+  const [cy, cm] = activeMk ? activeMk.split("-").map(Number) : [0,0];
+  const daysInMonth = activeMk ? new Date(cy, cm, 0).getDate() : 0;
+  const firstDow = activeMk ? (new Date(cy, cm-1, 1).getDay()+6)%7 : 0;
+  const evsByDay = {};
+  calEvs.forEach(e => {
+    const d = parseInt(e.date.slice(8));
+    if (!evsByDay[d]) evsByDay[d] = [];
+    evsByDay[d].push(e);
+  });
+
+  // 선택된 날짜의 이벤트
+  const selEvs = selDate ? (evsByDay[parseInt(selDate.slice(8))] || []) : [];
 
   return (
     <div className="page">
       <div className="sh">
         <div>
-          <h2>Vorstellungen & Generalproben</h2>
-          <div className="sh-sub">Höchste Priorität · andere Arbeit nur an freien Tagen</div>
+          <h2>Vorstellungen & GP</h2>
+          <div className="sh-sub">{vorstellungen.length} Termine gesamt</div>
         </div>
-        <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{vorstellungen.length} Termine</div>
       </div>
 
-      {/* Upcoming VS banner */}
-      {(() => {
-        const next = vorstellungen.find(e => e.date >= todayStr);
-        if (!next) return null;
-        const daysUntil = Math.ceil((new Date(next.date + "T12:00:00") - today) / 86400000);
-        return (
+      {/* 다음 공연 배너 */}
+      {next && (
         <div className="vs-banner" style={{ marginBottom: 16 }}>
-            <div className="priority-label">🎭 Nächste Vorstellung{daysUntil <= 1 ? " — HEUTE" : daysUntil <= 3 ? ` — in ${daysUntil} Tagen` : ""}</div>
-            <div className="vs-title">{next.title}</div>
-            <div className="vs-meta">📅 {fmtDate(next.date, false)} · ⏰ {next.startTime} Uhr · 📍 {next.location || "Hauptbühne"}</div>
+          <div className="priority-label">🎭 Nächste{daysUntil <= 0 ? " — HEUTE" : daysUntil === 1 ? " — morgen" : daysUntil <= 7 ? ` — in ${daysUntil} Tagen` : ""}</div>
+          <div className="vs-title">{next.title}</div>
+          <div className="vs-meta">📅 {fmtDate(next.date, false)} · ⏰ {next.startTime} Uhr · 📍 {next.location || "Hauptbühne"}</div>
+        </div>
+      )}
+
+      {/* 월 탭 */}
+      {allMonthKeys.length > 0 && (
+        <div className="vs-month-tabs">
+          {allMonthKeys.map(mk => {
+            const [y, m] = mk.split("-").map(Number);
+            const hasToday = mk === curMk;
+            const isAct = mk === activeMk;
+            const cnt = months[mk].length;
+            return (
+              <button key={mk} className={`vs-month-tab${isAct ? " active" : ""}`}
+                onClick={() => { setSelMonth(mk); setSelDate(null); }}>
+                {hasToday && <span className="tab-dot" />}
+                {MONTHS_DE[m-1].slice(0,3)} {String(y).slice(2)}
+                <span style={{ marginLeft:5, opacity:0.7, fontSize:"0.7em" }}>{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 달력 그리드 */}
+      {activeMk && (
+        <div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:10 }}>
+            <span style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)" }}>
+              {MONTHS_DE[cm-1]} {cy}
+            </span>
+            <span style={{ fontSize:"0.74rem", color:"var(--muted)" }}>
+              {calEvs.length} Termin{calEvs.length!==1?"e":""}
+            </span>
           </div>
-        );
-      })()}
 
-      {allMonthKeys.map(mk => {
-        const [y, m] = mk.split("-").map(Number);
-        const monthName = `${MONTHS_DE[m - 1]} ${y}`;
-        const evs = months[mk];
-
-        return (
-          <div key={mk} className="vs-month">
-            <div className="vs-month-title">{monthName}</div>
-            {evs.map(e => (
-              <div key={e.id} className="vs-row">
-                <div className="vs-row-date">
-                  <div style={{ fontSize: "0.7rem", color: "var(--muted)", fontWeight: 500 }}>{WEEKDAYS_DE[new Date(e.date + "T12:00:00").getDay()]}</div>
-                  <div style={{ fontSize: "1.1rem", color: "var(--text)", fontWeight: 700, letterSpacing: "-0.02em" }}>{e.date.slice(8)}</div>
-                </div>
-                <div className="vs-row-title">
-                  {e.title}
-                  {e.eventType === "Generalprobe" && <span style={{ marginLeft: 6, fontSize: "0.65rem", color: "var(--orange)", background: "var(--orange-bg)", border: "1px solid rgba(255,159,10,0.3)", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>GP</span>}
-                  {e.note && <div style={{ fontSize: "0.72rem", color: "var(--orange)", marginTop: 2 }}>⚠ {e.note}</div>}
-                </div>
-                <div className="vs-row-time">{e.startTime} Uhr</div>
-              </div>
+          <div className="vs-cal-grid">
+            {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d => (
+              <div key={d} className="vs-cal-dow">{d}</div>
             ))}
+            {Array(firstDow).fill(null).map((_,i) => (
+              <div key={"e"+i} className="vs-cal-cell empty" />
+            ))}
+            {Array.from({length: daysInMonth}, (_,i) => i+1).map(day => {
+              const ds = `${cy}-${String(cm).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+              const evs = evsByDay[day] || [];
+              const hasVS = evs.some(e => isVorstellung(e));
+              const hasGP = evs.some(e => e.eventType === "Generalprobe");
+              const isT = ds === todayStr;
+              const isSel = ds === selDate;
+              let cls = "vs-cal-cell";
+              if (hasVS) cls += " has-ev";
+              else if (hasGP) cls += " has-gp";
+              if (isT) cls += " today";
+              if (isSel) cls += " sel";
+              return (
+                <div key={day} className={cls}
+                  onClick={() => evs.length ? setSelDate(isSel ? null : ds) : null}>
+                  <div className="vs-cal-dn">{day}</div>
+                  {evs.length > 0 && (
+                    <div className="vs-cal-prods">
+                      {evs.map((e,i) => (
+                        <div key={i} className={`vs-cal-prod${e.eventType==="Generalprobe"&&!isVorstellung(e)?" gp":""}`}>
+                          {e.production || e.title}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {evs.length > 0 && (
+                    <div className="vs-cal-time">{evs[0].startTime} Uhr</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+
+          {/* 선택된 날짜 상세 */}
+          {selDate && selEvs.length > 0 && (
+            <div className="vs-detail">
+              <div className="vs-detail-hdr">
+                <span>
+                  {["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(selDate+"T12:00:00").getDay()]}, {parseInt(selDate.slice(8))}. {MONTHS_DE[cm-1]} {cy}
+                </span>
+                <button onClick={() => setSelDate(null)}
+                  style={{ background:"none", border:"none", color:"var(--faint)", cursor:"pointer", fontSize:"0.9rem", padding:"0 2px" }}>✕</button>
+              </div>
+              {selEvs.map((e,i) => (
+                <div key={i} className="vs-row">
+                  <div className="vs-row-date">
+                    <div style={{ fontSize:"0.68rem", color:"var(--muted)" }}>
+                      {e.eventType==="Generalprobe" ? "GP" : "VS"}
+                    </div>
+                    <div style={{ fontSize:"1.1rem", fontWeight:700, color: e.eventType==="Generalprobe" ? "var(--orange)" : "var(--accent)", letterSpacing:"-0.02em" }}>
+                      {e.startTime?.slice(0,5)}
+                    </div>
+                  </div>
+                  <div className="vs-row-title">
+                    {e.title}
+                    {e.eventType==="Generalprobe" && (
+                      <span style={{ marginLeft:6, fontSize:"0.65rem", color:"var(--orange)", background:"var(--orange-bg)",
+                        border:"1px solid rgba(255,159,10,0.3)", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>GP</span>
+                    )}
+                    {e.note && <div style={{ fontSize:"0.72rem", color:"var(--orange)", marginTop:2 }}>⚠ {e.note}</div>}
+                    {e.conductor && <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>🎵 {e.conductor}</div>}
+                    <div style={{ fontSize:"0.72rem", color:"var(--faint)", marginTop:2 }}>
+                      📍 {e.location||"Hauptbühne"}{e.endTime&&e.endTime!=="00:00"?` · bis ${e.endTime} Uhr`:""}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {vorstellungen.length === 0 && <div className="empty">Keine Vorstellungen geplant.</div>}
     </div>
@@ -1790,79 +1896,16 @@ function ChangesView({ scheds, notifs, user }) {
 //  PDF VIEW  — Claude API parses Semperoper schedule formats
 // ═══════════════════════════════════════════════════════════════════════
 function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
-  const [drag, setDrag]         = useState(false);
-  const [parsing, setParsing]   = useState(false);
-  const [parsed, setParsed]     = useState(null);
-  const [error, setError]       = useState("");
-  const [pdfFile, setPdfFile]   = useState(null);   // 업로드된 파일
-  const [pdfMeta, setPdfMeta]   = useState(null);   // { numPages, fileName }
-  const [pageFrom, setPageFrom] = useState(1);
-  const [pageTo, setPageTo]     = useState(1);
-  const [extractType, setExtractType] = useState("all"); // "all" | "vs" | "proben"
-  const [sourceTypeOverride, setSourceTypeOverride] = useState("auto"); // "auto"|"vorplanung"|"dienstplan"|"monatsplan"
+  const [drag, setDrag] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parsed, setParsed] = useState(null);
+  const [error, setError] = useState("");
   const fileRef = useRef();
 
-  // Vorplanung 페이지별 월 매핑
-  const VORPLANUNG_PAGE_MONTHS = {
-    1: [{ month: 8,  year: null, startDay: 27 },  // Aug (27일부터)
-        { month: 9,  year: null, startDay: 1  },  // Sep
-        { month: 10, year: null, startDay: 1  }], // Oct
-    2: [{ month: 11, year: null, startDay: 1  },  // Nov
-        { month: 12, year: null, startDay: 1  },  // Dec
-        { month: 1,  year: +1,   startDay: 1  }], // Jan (+1년)
-    3: [{ month: 2,  year: +1,   startDay: 1  },  // Feb
-        { month: 3,  year: +1,   startDay: 1  },  // Mar
-        { month: 4,  year: +1,   startDay: 1  }], // Apr
-    4: [{ month: 5,  year: +1,   startDay: 1  },  // May
-        { month: 6,  year: +1,   startDay: 1  },  // Jun
-        { month: 7,  year: +1,   startDay: 1  }], // Jul
-  };
-
-  const callApi = async (base64, pageHint, vsOnly, sourceType, pageNum) => {
-    const vsFilter = vsOnly === "vs"
+  const callApi = async (base64, pageHint, vsOnly) => {
+    const vsFilter = vsOnly
       ? "NUR Vorstellungen (VS) extrahieren! Alle anderen Typen (GP, OHP, KHP, BP, BO, TE, Bel, KP) IGNORIEREN."
-      : vsOnly === "proben"
-      ? "NUR Proben extrahieren (BP, BO, GP, OHP, KHP, KP, TE, Bel). Vorstellungen (VS) IGNORIEREN."
-      : "Alle Termine extrahieren (VS, BP, BO, GP, OHP, KHP, KP, TE, Bel, chorfrei).";
-
-    // Vorplanung: 페이지별 월 정보를 프롬프트에 명시
-    const isVorplanung = sourceType === "vorplanung";
-    const pageMonths = isVorplanung && pageNum ? VORPLANUNG_PAGE_MONTHS[pageNum] : null;
-
-    // 기준 시즌 연도 계산 (Vorplanung 파일의 첫 해)
-    const now = new Date();
-    const seasonStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-
-    let layoutInstructions = "";
-    if (isVorplanung && pageMonths) {
-      const monthNames = ["","Januar","Februar","März","April","Mai","Juni",
-        "Juli","August","September","Oktober","November","Dezember"];
-      const monthDetails = pageMonths.map((m, i) => {
-        const y = seasonStart + (m.year || 0);
-        const startNote = m.startDay > 1 ? ` (ab dem ${m.startDay}.)` : "";
-        return `  Spalte ${i+1}: ${monthNames[m.month]} ${y}${startNote}`;
-      }).join("\n");
-
-      layoutInstructions = `
-WICHTIG — LAYOUT DIESER VORPLANUNG-SEITE:
-Diese Seite hat 3 Monatsspalten nebeneinander:
-${monthDetails}
-
-Zeilenstruktur pro Tag:
-- Jede Zeile beginnt mit der Tagesnummer (z.B. "1.", "15.")
-- Pro Tag gibt es 1-2 Zeitangaben: Vormittagstermin und Abendtermin
-- Format: "HH Termintyp Stückname" (z.B. "10 BP Zauberflöte" oder "19 VS Carmen")
-- "cf" oder "frei" = chorfrei
-
-KRITISCH für die Datumszuordnung:
-- Die Tagesnummern 1-31 gelten IMMER für die Spalte, in der sie stehen
-- Spalte 1 = ${monthNames[pageMonths[0].month]} ${seasonStart + (pageMonths[0].year||0)}${pageMonths[0].startDay > 1 ? " (erst ab " + pageMonths[0].startDay + ".)" : ""}
-- Spalte 2 = ${monthNames[pageMonths[1].month]} ${seasonStart + (pageMonths[1].year||0)}
-- Spalte 3 = ${monthNames[pageMonths[2].month]} ${seasonStart + (pageMonths[2].year||0)}
-- Weise jede Tagesnummer dem RICHTIGEN Monat und Jahr zu!
-- Seite 1: August beginnt erst am 27. (nicht 1.)`;
-    }
-
+      : "Alle Termine extrahieren.";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1875,38 +1918,27 @@ KRITISCH für die Datumszuordnung:
         model: "claude-sonnet-4-20250514",
         max_tokens: 16000,
         system: `Du bist ein Assistent des Staatsopernchors der Sächsischen Staatsoper Dresden.
-Du analysierst Proben- und Spielpläne und extrahierst Termine präzise.
+Du analysierst Proben- und Spielpläne und extrahierst Termine.
 
 Abkürzungen: VS=Vorstellung, BP=Bühnenprobe, BO=Bühnenorchesterprobe, GP=Generalprobe,
 KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung,
-Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei, TP=Tonprobe, Ab=Abnahme, Auf=Aufnahme
-${layoutInstructions}
+Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei
 
 ${vsFilter}
 
 Antworte NUR mit einem JSON-Array. Kein Markdown, keine Backticks.
 Beginne direkt mit [ und ende mit ]
 
-Format je Termin:
-{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"${sourceType}"}
+Format:
+{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"vorplanung"}
 
-eventType-Mapping:
-VS → "Vorstellung", BP → "Bühnenprobe", BO → "Bühnenorchesterprobe",
-GP → "Generalprobe", OHP → "Orchesterhauptprobe", KHP → "Kleines Hauptprobe",
-KP → "Konzertprobe", TE → "Toneinspielung", Bel → "Beleuchtungsprobe",
-cf/frei → "Chorfrei", TP → "Tonprobe"
-
-- Uhrzeit als "HH:MM" (z.B. "19" → "19:00", "19.30" → "19:30")
-- endTime immer "00:00" wenn nicht angegeben
-- sourceType immer "${sourceType}"
-- location: VS/GP/OHP/BO → "Bühne", BP → "Bühne", KP/TE → "Probensaal"
-- targetGroup: "Alle Eingeteilten" wenn nicht anders angegeben
+- Wenn Uhrzeit unbekannt: "00:00"
 - Antworte AUSSCHLIESSLICH mit dem JSON-Array`,
         messages: [{
           role: "user",
           content: [
             { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-            { type: "text", text: `Analysiere ${pageHint} und extrahiere ALLE Termine als JSON-Array. Achte besonders auf die korrekte Zuordnung der Tagesnummern zu den richtigen Monaten und Jahren!` }
+            { type: "text", text: `Analysiere ${pageHint} und extrahiere die Termine als JSON-Array.` }
           ]
         }]
       })
@@ -1914,85 +1946,45 @@ cf/frei → "Chorfrei", TP → "Tonprobe"
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || "API-Fehler");
     const raw = data.content.map(c => c.text || "").join("");
-    const clean = raw.replace(/\`\`\`json|\`\`\`/g, "").trim();
+    const clean = raw.replace(/```json|```/g, "").trim();
     const match = clean.match(/\[[\s\S]*\]/);
     if (!match) return [];
     return JSON.parse(match[0]);
   };
 
-  // PDF 업로드 → 페이지 수 파악 → 설정 UI 표시
-  const onFile = async (f) => {
-    if (!f || f.type !== "application/pdf") { setError("Bitte eine PDF-Datei hochladen."); return; }
-    setError(""); setParsed(null);
-    // PDF.js로 페이지 수 파악
-    try {
-      const url = URL.createObjectURL(f);
-      const pdfjsLib = window.pdfjsLib;
-      if (pdfjsLib) {
-        const pdf = await pdfjsLib.getDocument(url).promise;
-        const numPages = pdf.numPages;
-        URL.revokeObjectURL(url);
-        setPdfFile(f);
-        setPdfMeta({ numPages, fileName: f.name });
-        setPageFrom(1);
-        setPageTo(numPages);
-        // 파일명으로 기본 설정 자동 지정
-        const lname = f.name.toLowerCase();
-        if (lname.includes("vorplanung") || lname.includes("vorp")) {
-          setExtractType("vs");
-          setSourceTypeOverride("vorplanung");
-        } else if (lname.includes("monat")) {
-          setExtractType("all");
-          setSourceTypeOverride("monatsplan");
-        } else {
-          setExtractType("all");
-          setSourceTypeOverride("dienstplan");
-        }
-      } else {
-        // PDF.js 없으면 바로 분석
-        setPdfFile(f);
-        setPdfMeta({ numPages: null, fileName: f.name });
-        setPageFrom(1); setPageTo(1);
-      }
-    } catch(e) {
-      setPdfFile(f);
-      setPdfMeta({ numPages: null, fileName: f.name });
-    }
-  };
-
-  const parsePdf = async () => {
-    if (!pdfFile) return;
+  const parsePdf = async (file) => {
     setParsing(true); setError(""); setParsed(null);
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = e => res(e.target.result.split(",")[1]);
         r.onerror = () => rej(new Error("Lesefehler"));
-        r.readAsDataURL(pdfFile);
+        r.readAsDataURL(file);
       });
 
-      const totalPages = pdfMeta?.numPages;
-      const pageHint = totalPages
-        ? (pageFrom === 1 && pageTo === totalPages
-            ? `alle ${totalPages} Seiten`
-            : pageFrom === pageTo
-            ? `Seite ${pageFrom}`
-            : `Seiten ${pageFrom} bis ${pageTo}`)
-        : "diesen Plan";
+      const isVorplanung = file.name.toLowerCase().includes("vorplanung") ||
+                           file.name.toLowerCase().includes("vorp");
 
-      const srcType = sourceTypeOverride === "auto"
-        ? (pdfFile.name.toLowerCase().includes("vorp") ? "vorplanung"
-          : pdfFile.name.toLowerCase().includes("monat") ? "monatsplan" : "dienstplan")
-        : sourceTypeOverride;
+      let allEvents = [];
+      if (isVorplanung) {
+        // Vorplanung: VS만 추출, 전체 PDF 한번에 처리
+        allEvents = await callApi(base64, "alle Seiten dieser Vorplanung (4 Seiten)", true);
+      } else {
+        allEvents = await callApi(base64, "diesen Probenplan", false);
+      }
 
-      const allEvents = await callApi(base64, pageHint, extractType, srcType, pageFrom === pageTo ? pageFrom : null);
-      if (allEvents.length === 0) throw new Error("Keine Termine gefunden — bitte Seitenbereich oder Typ prüfen");
-      setParsed(allEvents.map(e => ({ ...e, sourceType: srcType, _import: !isChorfrei(e) })));
+      if (allEvents.length === 0) throw new Error("Keine Termine gefunden");
+      setParsed(allEvents.map(e => ({ ...e, _import: !isChorfrei(e) })));
     } catch (e) {
-      setError("Fehler: " + e.message);
+      setError("Fehler beim Analysieren: " + e.message);
     } finally {
       setParsing(false);
     }
+  };
+
+  const onFile = f => {
+    if (!f || f.type !== "application/pdf") { setError("Bitte eine PDF-Datei hochladen."); return; }
+    parsePdf(f);
   };
 
   const importSelected = async () => {
@@ -2046,165 +2038,24 @@ cf/frei → "Chorfrei", TP → "Tonprobe"
     <div className="page">
       <div className="sh"><h2>PDF Import</h2><div className="sh-sub">Dienstplan · Monatsplan · Vorplanung</div></div>
 
-      {/* ── 파일 드롭존 (파일 미선택 시만) ── */}
-      {!pdfMeta && (
-        <div
-          className={`pdf-drop${drag ? " drag" : ""}`}
-          onDragOver={e => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={e => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}
-          onClick={() => fileRef.current.click()}>
-          <div className="pdf-icon">📄</div>
-          <h3>PDF-Probenplan hochladen</h3>
-          <p>Dienstplan · Monatsplan · Vorplanung · Tagesplan</p>
-          <p style={{ marginTop: 4 }}>Klicken oder per Drag & Drop</p>
-          <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
-        </div>
-      )}
-
-      {/* ── 파일 선택됨 → 분석 설정 패널 ── */}
-      {pdfMeta && !parsed && !parsing && (
-        <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:14, padding:18, marginBottom:16 }}>
-          {/* 파일명 + 다시 선택 */}
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-            <span style={{ fontSize:"1.4rem" }}>📄</span>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:"0.88rem", fontWeight:600, color:"var(--text)", wordBreak:"break-all" }}>{pdfMeta.fileName}</div>
-              <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:2 }}>
-                {pdfMeta.numPages ? `${pdfMeta.numPages} Seiten` : "Seiten unbekannt"}
-              </div>
-            </div>
-            <button onClick={() => { setPdfMeta(null); setPdfFile(null); setError(""); }}
-              style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
-                color:"var(--muted)", padding:"4px 10px", fontSize:"0.78rem",
-                fontFamily:"var(--sans)", cursor:"pointer" }}>
-              ✕ Andere Datei
-            </button>
-          </div>
-
-          {/* 페이지 범위 선택 */}
-          {pdfMeta.numPages && pdfMeta.numPages > 1 && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
-                textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
-                Seitenbereich
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                {/* 전체 선택 버튼 */}
-                <button onClick={() => { setPageFrom(1); setPageTo(pdfMeta.numPages); }}
-                  style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
-                    background: pageFrom===1 && pageTo===pdfMeta.numPages ? "var(--accent)" : "var(--s2)",
-                    color: pageFrom===1 && pageTo===pdfMeta.numPages ? "#fff" : "var(--text2)",
-                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer" }}>
-                  Alle ({pdfMeta.numPages})
-                </button>
-                {/* 페이지별 버튼 */}
-                {Array.from({length: pdfMeta.numPages}, (_, i) => i+1).map(p => (
-                  <button key={p} onClick={() => { setPageFrom(p); setPageTo(p); }}
-                    style={{ width:36, height:36, borderRadius:8, border:"1px solid var(--border)",
-                      background: pageFrom===p && pageTo===p ? "var(--accent)" : "var(--s2)",
-                      color: pageFrom===p && pageTo===p ? "#fff" : "var(--text2)",
-                      fontSize:"0.82rem", fontWeight:600, fontFamily:"var(--sans)", cursor:"pointer" }}>
-                    {p}
-                  </button>
-                ))}
-                {/* 직접 입력 */}
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:4 }}>
-                  <span style={{ fontSize:"0.74rem", color:"var(--muted)" }}>S.</span>
-                  <input type="number" min={1} max={pdfMeta.numPages} value={pageFrom}
-                    onChange={e => setPageFrom(Math.max(1, Math.min(+e.target.value, pageTo)))}
-                    style={{ width:44, padding:"4px 6px", background:"var(--s2)", border:"1px solid var(--border)",
-                      borderRadius:6, color:"var(--text)", fontSize:"0.82rem", textAlign:"center",
-                      fontFamily:"var(--sans)" }} />
-                  <span style={{ fontSize:"0.74rem", color:"var(--muted)" }}>–</span>
-                  <input type="number" min={pageFrom} max={pdfMeta.numPages} value={pageTo}
-                    onChange={e => setPageTo(Math.max(pageFrom, Math.min(+e.target.value, pdfMeta.numPages)))}
-                    style={{ width:44, padding:"4px 6px", background:"var(--s2)", border:"1px solid var(--border)",
-                      borderRadius:6, color:"var(--text)", fontSize:"0.82rem", textAlign:"center",
-                      fontFamily:"var(--sans)" }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 추출 타입 */}
-          <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
-              textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
-              Extrahieren
-            </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {[
-                ["all",    "🗓 Alle Termine"],
-                ["vs",     "🎭 Nur Vorstellungen"],
-                ["proben", "🎵 Nur Proben"],
-              ].map(([v,l]) => (
-                <button key={v} onClick={() => setExtractType(v)}
-                  style={{ padding:"6px 14px", borderRadius:8,
-                    border:`1px solid ${extractType===v ? "var(--accent)" : "var(--border)"}`,
-                    background: extractType===v ? "var(--accent-dim)" : "var(--s2)",
-                    color: extractType===v ? "var(--accent)" : "var(--text2)",
-                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer",
-                    fontWeight: extractType===v ? 600 : 400 }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 소스 타입 */}
-          <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--muted)",
-              textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
-              Plantyp
-            </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {[
-                ["dienstplan",  "Dienstplan"],
-                ["monatsplan",  "Monatsplan"],
-                ["vorplanung",  "Vorplanung"],
-                ["tagesplan",   "Tagesplan"],
-              ].map(([v,l]) => (
-                <button key={v} onClick={() => setSourceTypeOverride(v)}
-                  style={{ padding:"6px 14px", borderRadius:8,
-                    border:`1px solid ${sourceTypeOverride===v ? "var(--blue)" : "var(--border)"}`,
-                    background: sourceTypeOverride===v ? "rgba(46,123,219,0.12)" : "var(--s2)",
-                    color: sourceTypeOverride===v ? "var(--blue)" : "var(--text2)",
-                    fontSize:"0.78rem", fontFamily:"var(--sans)", cursor:"pointer",
-                    fontWeight: sourceTypeOverride===v ? 600 : 400 }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 분석 버튼 */}
-          <button onClick={parsePdf}
-            style={{ width:"100%", padding:"12px", borderRadius:10,
-              background:"var(--accent)", border:"none", color:"#fff",
-              fontSize:"0.92rem", fontWeight:700, fontFamily:"var(--sans)",
-              cursor:"pointer", letterSpacing:"-0.01em" }}>
-            🎼 Analysieren
-            {pdfMeta.numPages && pageFrom === pageTo
-              ? ` (Seite ${pageFrom})`
-              : pdfMeta.numPages && !(pageFrom===1 && pageTo===pdfMeta.numPages)
-              ? ` (S. ${pageFrom}–${pageTo})`
-              : ""}
-          </button>
-        </div>
-      )}
+      <div
+        className={`pdf-drop${drag ? " drag" : ""}`}
+        onDragOver={e => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}
+        onClick={() => fileRef.current.click()}>
+        <div className="pdf-icon">📄</div>
+        <h3>PDF-Probenplan hochladen</h3>
+        <p>Dienstplan · Monatsplan · Vorplanung · Tagesplan</p>
+        <p style={{ marginTop: 4 }}>Klicken oder per Drag & Drop</p>
+        <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
+      </div>
 
       {parsing && (
         <div className="parsing">
           <div className="pulse" style={{ fontSize: "1.5rem", marginBottom: 8 }}>🎼</div>
-          <p>Claude analysiert den Plan…</p>
-          <p style={{ marginTop: 4, fontSize: "0.72rem" }}>
-            {pdfMeta?.numPages && pageFrom === pageTo
-              ? `Seite ${pageFrom} von ${pdfMeta.numPages}`
-              : pdfMeta?.numPages
-              ? `Seiten ${pageFrom}–${pageTo}`
-              : "Erkennt Stücke · Typen · Zielgruppen · Zeiten"}
-          </p>
+          <p>Claude analysiert den Probenplan…</p>
+          <p style={{ marginTop: 4, fontSize: "0.72rem" }}>Erkennt Stücke · Typen · Zielgruppen · Zeiten</p>
         </div>
       )}
 
@@ -2212,13 +2063,6 @@ cf/frei → "Chorfrei", TP → "Tonprobe"
 
       {parsed && groupedParsed && (
         <div>
-          {/* 다시 분석 버튼 */}
-          <button onClick={() => { setParsed(null); }}
-            style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
-              color:"var(--muted)", padding:"5px 12px", fontSize:"0.78rem",
-              fontFamily:"var(--sans)", cursor:"pointer", marginBottom:12 }}>
-            ← Einstellungen ändern
-          </button>
           {/* Summary */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             <div style={{ background: "#2A0808", border: "1px solid #5A1515", padding: "8px 14px", fontSize: "0.8rem" }}>
@@ -2304,7 +2148,7 @@ cf/frei → "Chorfrei", TP → "Tonprobe"
 // ═══════════════════════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ═══════════════════════════════════════════════════════════════════════
-function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings, users, allSettings }) {
+function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
   const [notifModal, setNotifModal] = useState(false);
@@ -2333,7 +2177,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
   return (
     <div className="page">
       <div className="atabs">
-        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
+        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"]].map(([v, l]) => (
           <button key={v} className={`atab${atab === v ? " on" : ""}`} onClick={() => setAtab(v)}>{l}</button>
         ))}
       </div>
@@ -2404,10 +2248,6 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
             </div>
           ))}
         </>
-      )}
-
-      {atab === "statistik" && (
-        <BesetzungsStatistik scheds={scheds} users={users || []} allSettings={allSettings || {}} />
       )}
 
       {editModal && (
@@ -2955,294 +2795,198 @@ function timeAgoShort(ts) {
 //  EINSTELLUNGEN (Settings)
 // ═══════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════
-//  BESETZUNGSSTATISTIK
+//  PRODUCTION PICKER — 시즌별 작품 선택
 // ═══════════════════════════════════════════════════════════════════════
-function BesetzungsStatistik({ scheds, users, allSettings }) {
-  const [view, setView]           = useState("summary");
-  const [selSeason, setSelSeason] = useState("all");
-  const [selProd, setSelProd]     = useState(null);
-  const [selMember, setSelMember] = useState(null);
-  const [search, setSearch]       = useState("");
+function getSeasonLabel(date) {
+  if (!date) return null;
+  const d = new Date(date + "T12:00:00");
+  const y = d.getFullYear(); const m = d.getMonth();
+  const s = m >= 7 ? y : y - 1;
+  return `${s}/${String(s+1).slice(2)}`;
+}
 
-  const VOICE_COL = { Sopran:"#E8920A", Alt:"#2DB34A", Tenor:"#2E7BDB", Bass:"#E8173A" };
+function getCurrentSeason() {
+  const now = new Date();
+  const y = now.getFullYear(); const m = now.getMonth();
+  const s = m >= 7 ? y : y - 1;
+  return `${s}/${String(s+1).slice(2)}`;
+}
 
-  const getSeasonLabel = (date) => {
-    if (!date) return "Unbekannt";
-    const d = new Date(date + "T12:00:00");
-    const y = d.getFullYear(); const m = d.getMonth();
-    const s = m >= 7 ? y : y - 1;
-    return `${s}/${String(s+1).slice(2)}`;
+function ProductionPicker({ settings, saveSettings, scheds }) {
+  const curSeason = getCurrentSeason();
+  const [selSeason, setSelSeason] = useState(curSeason);
+
+  // Vorplanung에서 시즌별 작품 추출
+  // Vorstellung/GP 이벤트의 날짜로 시즌 판단
+  const seasonProds = {};
+  scheds.forEach(e => {
+    if (!e.production || !e.date) return;
+    const sl = getSeasonLabel(e.date);
+    if (!sl) return;
+    if (!seasonProds[sl]) seasonProds[sl] = new Set();
+    splitProductions(e.production, []).forEach(p => {
+      const norm = normalizeProduction(p, []);
+      if (norm) seasonProds[sl].add(norm);
+    });
+  });
+
+  // 전체 시즌 목록 (정렬)
+  const allSeasons = Object.keys(seasonProds).sort();
+
+  // myProductions는 { "시즌": ["작품1", "작품2"] } 형태로 저장
+  // 하위호환: 기존 배열 형태면 currentSeason에 할당
+  const raw = settings.myProductionsBySeason;
+  const myProdsBySeason = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? raw
+    : {};
+
+  // 현재 시즌의 선택된 작품
+  const selProds = myProdsBySeason[selSeason] || [];
+  const prodsInSeason = [...(seasonProds[selSeason] || new Set())].sort();
+
+  const toggle = (prod) => {
+    const cur = myProdsBySeason[selSeason] || [];
+    const next = cur.includes(prod) ? cur.filter(p => p !== prod) : [...cur, prod];
+    const updated = { ...myProdsBySeason, [selSeason]: next };
+    // 하위호환: myProductions = 현재시즌 + 다른시즌 통합 배열 (Spielplan 필터용)
+    const allSelected = [...new Set(Object.values(updated).flat())];
+    saveSettings({ ...settings, myProductionsBySeason: updated, myProductions: allSelected });
   };
 
-  const vorstellungen = scheds.filter(e => e.eventType === "Vorstellung" && e.production);
-  const seasons = ["all", ...[...new Set(vorstellungen.map(e => getSeasonLabel(e.date)))].sort().reverse()];
-  const filteredVS = selSeason === "all" ? vorstellungen
-    : vorstellungen.filter(e => getSeasonLabel(e.date) === selSeason);
-  const allProds = [...new Set(filteredVS.map(e => e.production).filter(Boolean))].sort();
+  const toggleAll = () => {
+    const cur = myProdsBySeason[selSeason] || [];
+    const next = cur.length === prodsInSeason.length ? [] : [...prodsInSeason];
+    const updated = { ...myProdsBySeason, [selSeason]: next };
+    const allSelected = [...new Set(Object.values(updated).flat())];
+    saveSettings({ ...settings, myProductionsBySeason: updated, myProductions: allSelected });
+  };
 
-  // 단원별 집계 — allSettings[uid].myProductions + productionSeasons 기반
-  const memberStats = users.map(u => {
-    const uSet = allSettings[u.id] || {};
-    const myProds = uSet.myProductions || [];
-    const prodSeasons = uSet.productionSeasons || {};
-    const prodsInSeason = myProds.filter(prod => {
-      const inVS = allProds.some(p =>
-        p.toLowerCase() === prod.toLowerCase() ||
-        p.toLowerCase().includes(prod.toLowerCase()) ||
-        prod.toLowerCase().includes(p.toLowerCase())
-      );
-      if (!inVS) return false;
-      if (selSeason === "all") return true;
-      const ps = prodSeasons[prod];
-      return !ps || ps === selSeason;
-    });
-    return {
-      id: u.id,
-      name: (u.name || u.email || u.id).split(" · ")[0],
-      part: u.part || "",
-      voice: u.voice || "",
-      productions: prodsInSeason,
-      prodCount: prodsInSeason.length,
-    };
-  });
-
-  const prodStats = allProds.map(prod => {
-    const members = memberStats.filter(m =>
-      m.productions.some(p => p.toLowerCase() === prod.toLowerCase() ||
-        p.toLowerCase().includes(prod.toLowerCase()) ||
-        prod.toLowerCase().includes(p.toLowerCase()))
-    );
-    const byVoice = {};
-    members.forEach(m => { byVoice[m.voice] = (byVoice[m.voice]||0)+1; });
-    return { prod, members, byVoice, total: members.length };
-  });
-
-  const exportCSV = () => {
-    const rows = [["Name","Stimmgruppe","Stimme",...allProds,"Gesamt"]];
-    [...memberStats].sort((a,b) => {
-      const vo=["Sopran","Alt","Tenor","Bass"];
-      const vi=vo.indexOf(a.voice)-vo.indexOf(b.voice);
-      return vi!==0?vi:a.name.localeCompare(b.name);
-    }).forEach(m => {
-      const row=[m.name,m.part,m.voice];
-      allProds.forEach(prod => row.push(
-        m.productions.some(p=>p.toLowerCase()===prod.toLowerCase()||
-          p.toLowerCase().includes(prod.toLowerCase())||
-          prod.toLowerCase().includes(p.toLowerCase()))?"✓":""
-      ));
-      row.push(m.prodCount); rows.push(row);
-    });
-    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=`Besetzung_${selSeason}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+  // Neu dazu 토글 (기존 호환)
+  const toggleNeuDazu = (prod) => {
+    const cur = settings.neuDazuProductions || [];
+    const next = cur.includes(prod) ? cur.filter(p => p !== prod) : [...cur, prod];
+    saveSettings({ ...settings, neuDazuProductions: next });
   };
 
   return (
-    <div style={{ paddingBottom:40 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
-        <div style={{ fontFamily:"var(--serif)", fontSize:"1.05rem", fontWeight:600, color:"var(--text)" }}>Besetzungsstatistik</div>
-        <select value={selSeason} onChange={e=>{setSelSeason(e.target.value);setSelProd(null);setSelMember(null);}}
-          style={{ marginLeft:"auto", background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
-            color:"var(--text)", padding:"5px 10px", fontSize:"0.82rem", fontFamily:"var(--sans)", cursor:"pointer" }}>
-          {seasons.map(s=><option key={s} value={s}>{s==="all"?"Alle Spielzeiten":`Spielzeit ${s}`}</option>)}
-        </select>
-        <button onClick={exportCSV} style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8,
-          color:"var(--text)", padding:"5px 12px", fontSize:"0.82rem", fontFamily:"var(--sans)", cursor:"pointer" }}>↓ CSV</button>
+    <div className="settings-section">
+      <div className="settings-title">Meine Produktionen</div>
+      <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:12 }}>
+        Pro Spielzeit auswählen, an welchen Produktionen du beteiligt bist.
       </div>
 
-      <div style={{ display:"flex", gap:4, marginBottom:16, background:"var(--s2)", borderRadius:10, padding:4 }}>
-        {[["summary","📊 Übersicht"],["byProduction","🎭 Produktion"],["byMember","👤 Mitglied"]].map(([v,l])=>(
-          <button key={v} onClick={()=>{setView(v);setSelProd(null);setSelMember(null);setSearch("");}}
-            style={{ flex:1, padding:"7px 6px", borderRadius:8, border:"none", cursor:"pointer",
-              background:view===v?"var(--accent)":"transparent",
-              color:view===v?"#fff":"var(--text2)", fontFamily:"var(--sans)",
-              fontSize:"0.78rem", fontWeight:view===v?600:400, transition:"all 0.15s" }}>{l}</button>
-        ))}
-      </div>
+      {allSeasons.length === 0 && (
+        <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"10px 0" }}>
+          Noch keine Produktionen im Spielplan. Bitte Admin-Import durchführen.
+        </div>
+      )}
 
-      {/* ── 📊 Übersicht ── */}
-      {view==="summary" && (
-        <div>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>
-              Produktionen ({allProds.length})
-            </div>
-            {allProds.length===0 && <div style={{ fontSize:"0.82rem", color:"var(--faint)", fontStyle:"italic" }}>Keine Vorstellungen.</div>}
-            {prodStats.map(({prod,total,byVoice})=>(
-              <div key={prod} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6,
-                padding:"8px 12px", background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8 }}>
-                <div style={{ flex:1, fontSize:"0.84rem", fontWeight:500, color:"var(--text)" }}>{prod}</div>
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                  {["Sopran","Alt","Tenor","Bass"].map(v=>byVoice[v]?(
-                    <span key={v} style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[v],
-                      background:VOICE_COL[v]+"18", borderRadius:5, padding:"2px 6px" }}>
-                      {v.slice(0,1)}{byVoice[v]}
+      {/* 시즌 탭 */}
+      {allSeasons.length > 0 && (
+        <>
+          <div style={{ display:"flex", gap:4, marginBottom:14, flexWrap:"wrap" }}>
+            {allSeasons.map(s => {
+              const cnt = (myProdsBySeason[s] || []).length;
+              const total = (seasonProds[s]?.size || 0);
+              const isCur = s === curSeason;
+              const isAct = s === selSeason;
+              return (
+                <button key={s} onClick={() => setSelSeason(s)}
+                  style={{ padding:"6px 14px", borderRadius:20,
+                    border:`1px solid ${isAct ? "var(--accent)" : "var(--border)"}`,
+                    background: isAct ? "var(--accent)" : "var(--s1)",
+                    color: isAct ? "#fff" : isCur ? "var(--accent)" : "var(--text2)",
+                    fontFamily:"var(--sans)", fontSize:"0.78rem",
+                    fontWeight: isAct ? 700 : isCur ? 600 : 400, cursor:"pointer", transition:"all 0.15s" }}>
+                  {isCur && !isAct && <span style={{ marginRight:4 }}>●</span>}
+                  Spielzeit {s}
+                  {cnt > 0 && (
+                    <span style={{ marginLeft:6, fontSize:"0.7em", opacity:0.8 }}>
+                      {cnt}/{total}
                     </span>
-                  ):null)}
-                  <span style={{ fontSize:"0.82rem", fontWeight:700, color:"var(--text2)", minWidth:20, textAlign:"right" }}>{total}</span>
-                </div>
-              </div>
-            ))}
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {["Sopran","Alt","Tenor","Bass"].map(voice=>{
-            const vm=memberStats.filter(m=>m.voice===voice).sort((a,b)=>b.prodCount-a.prodCount);
-            if(!vm.length) return null;
-            const max=Math.max(...vm.map(m=>m.prodCount),1);
-            const avg=vm.reduce((s,m)=>s+m.prodCount,0)/vm.length;
-            return (
-              <div key={voice} style={{ marginBottom:22 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                  <div style={{ fontSize:"0.88rem", fontWeight:700, color:VOICE_COL[voice] }}>{voice}</div>
-                  <div style={{ fontSize:"0.74rem", color:"var(--muted)" }}>Ø {avg.toFixed(1)} · {vm.length} Mitgl.</div>
-                </div>
-                {vm.map(m=>(
-                  <div key={m.id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                    <div style={{ width:120, fontSize:"0.74rem", color:"var(--text2)", flexShrink:0,
-                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
-                    <div style={{ flex:1, height:14, background:"var(--s2)", borderRadius:3, overflow:"hidden" }}>
-                      {m.prodCount>0&&<div style={{ height:"100%", borderRadius:3, transition:"width 0.4s",
-                        width:`${(m.prodCount/max)*100}%`,
-                        background:m.prodCount===max?VOICE_COL[voice]:VOICE_COL[voice]+"99" }}/>}
+          {/* 선택/해제 버튼 */}
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={toggleAll}>
+              {selProds.length === prodsInSeason.length ? "Alle abwählen" : "Alle wählen"}
+            </button>
+            <span style={{ marginLeft:"auto", fontSize:"0.74rem", color:"var(--muted)" }}>
+              {selProds.length} / {prodsInSeason.length} ausgewählt
+            </span>
+          </div>
+
+          {/* 작품 목록 */}
+          {prodsInSeason.length === 0 && (
+            <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"8px 0" }}>
+              Keine Produktionen für Spielzeit {selSeason} gefunden.
+            </div>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {prodsInSeason.map(prod => {
+              const isSelected = selProds.includes(prod);
+              const isNeuDazu = (settings.neuDazuProductions || []).includes(prod);
+              return (
+                <div key={prod} style={{ display:"flex", alignItems:"center",
+                  background: isSelected ? "rgba(232,23,58,0.07)" : "var(--s1)",
+                  border:`1px solid ${isSelected ? "rgba(232,23,58,0.3)" : "var(--border)"}`,
+                  borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                  borderRadius:10, overflow:"hidden" }}>
+                  {/* 참여 체크 */}
+                  <button onClick={() => toggle(prod)}
+                    style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
+                      flex:1, background:"transparent", border:"none",
+                      cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
+                    <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
+                      background: isSelected ? "var(--accent)" : "var(--s2)",
+                      border:`1px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
+                      display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
                     </div>
-                    <div style={{ width:20, textAlign:"right", fontSize:"0.76rem", flexShrink:0,
-                      fontWeight:m.prodCount===max?700:400,
-                      color:m.prodCount===max?VOICE_COL[voice]:"var(--text2)" }}>{m.prodCount}</div>
-                  </div>
-                ))}
-                <div style={{ fontSize:"0.68rem", color:"var(--faint)", marginTop:4, paddingLeft:128 }}>Ø {avg.toFixed(1)} Produktionen</div>
+                    <span style={{ fontSize:"0.88rem", fontWeight: isSelected ? 600 : 400,
+                      color: isSelected ? "var(--text)" : "var(--text2)" }}>
+                      {prod}
+                    </span>
+                  </button>
+                  {/* Neu dazu 토글 */}
+                  {isSelected && (
+                    <button onClick={() => toggleNeuDazu(prod)}
+                      style={{ padding:"11px 14px", background:"transparent",
+                        borderLeft:"1px solid var(--border)", border:"none",
+                        borderLeft:"1px solid var(--border)",
+                        cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center" }}>
+                      <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
+                        background: isNeuDazu ? "var(--blue)" : "var(--s3)",
+                        border:`1px solid ${isNeuDazu ? "var(--blue)" : "var(--border2)"}`,
+                        display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        {isNeuDazu && <span style={{ color:"white", fontSize:"0.6rem", fontWeight:700 }}>✓</span>}
+                      </div>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 다른 시즌에도 있는 작품 안내 */}
+          {selProds.length > 0 && (() => {
+            const otherSeasons = allSeasons.filter(s => s !== selSeason);
+            const overlap = selProds.filter(prod =>
+              otherSeasons.some(s => (myProdsBySeason[s]||[]).includes(prod))
+            );
+            if (!overlap.length) return null;
+            return (
+              <div style={{ marginTop:10, padding:"8px 12px", background:"rgba(46,123,219,0.07)",
+                border:"1px solid rgba(46,123,219,0.2)", borderRadius:8, fontSize:"0.74rem", color:"var(--blue)" }}>
+                💡 {overlap.join(", ")} — auch in einer anderen Spielzeit ausgewählt
               </div>
             );
-          })}
-        </div>
-      )}
-
-      {/* ── 🎭 작품별 ── */}
-      {view==="byProduction" && (
-        <div>
-          {selProd ? (
-            <>
-              <button onClick={()=>setSelProd(null)} style={{ background:"none", border:"none", color:"var(--accent)",
-                cursor:"pointer", fontFamily:"var(--sans)", fontSize:"0.82rem", marginBottom:12, padding:0 }}>← Zurück</button>
-              <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, padding:16 }}>
-                <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)", marginBottom:4 }}>{selProd}</div>
-                <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:16 }}>
-                  {prodStats.find(p=>p.prod===selProd)?.total||0} Mitglieder eingesetzt
-                </div>
-                {["Sopran","Alt","Tenor","Bass"].map(voice=>{
-                  const ms=(prodStats.find(p=>p.prod===selProd)?.members||[])
-                    .filter(m=>m.voice===voice).sort((a,b)=>a.name.localeCompare(b.name));
-                  if(!ms.length) return null;
-                  return (
-                    <div key={voice} style={{ marginBottom:12 }}>
-                      <div style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[voice],
-                        textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>
-                        {voice} ({ms.length})
-                      </div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                        {ms.map(m=>(
-                          <span key={m.id} style={{ background:"var(--s2)", border:"1px solid var(--border)",
-                            borderRadius:6, padding:"3px 8px", fontSize:"0.78rem", color:"var(--text2)" }}>
-                            {m.name}{m.part&&<span style={{ fontSize:"0.68rem", color:"var(--faint)", marginLeft:4 }}>{m.part}</span>}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {prodStats.map(({prod,total,byVoice})=>(
-                <button key={prod} onClick={()=>setSelProd(prod)}
-                  style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
-                    background:"var(--s1)", border:"1px solid var(--border)",
-                    borderLeft:"3px solid var(--accent)", borderRadius:10,
-                    cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:"0.9rem", fontWeight:600, color:"var(--text)" }}>{prod}</div>
-                    <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:2 }}>
-                      {total} Mitglieder
-                      {["Sopran","Alt","Tenor","Bass"].map(v=>byVoice[v]?(
-                        <span key={v} style={{ marginLeft:6, color:VOICE_COL[v] }}>{v.slice(0,1)}{byVoice[v]}</span>
-                      ):null)}
-                    </div>
-                  </div>
-                  <span style={{ color:"var(--faint)" }}>›</span>
-                </button>
-              ))}
-              {allProds.length===0&&<div style={{ textAlign:"center", color:"var(--faint)", padding:40, fontSize:"0.88rem" }}>Keine Vorstellungen.</div>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── 👤 단원별 ── */}
-      {view==="byMember" && (
-        <div>
-          <input placeholder="Name suchen…" value={search} onChange={e=>{setSearch(e.target.value);setSelMember(null);}}
-            style={{ width:"100%", padding:"8px 12px", background:"var(--s2)", border:"1px solid var(--border)",
-              borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem",
-              marginBottom:12, boxSizing:"border-box" }}/>
-          {selMember ? (
-            <>
-              <button onClick={()=>setSelMember(null)} style={{ background:"none", border:"none", color:"var(--accent)",
-                cursor:"pointer", fontFamily:"var(--sans)", fontSize:"0.82rem", marginBottom:12, padding:0 }}>← Zurück</button>
-              <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, padding:16 }}>
-                <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)", marginBottom:2 }}>{selMember.name}</div>
-                <div style={{ fontSize:"0.78rem", marginBottom:14, color:VOICE_COL[selMember.voice]||"var(--muted)" }}>
-                  {selMember.part} · {selMember.prodCount} Produktion{selMember.prodCount!==1?"en":""}
-                </div>
-                {selMember.productions.length===0
-                  ? <div style={{ fontSize:"0.82rem", color:"var(--faint)", fontStyle:"italic" }}>Keine Produktionen eingetragen.</div>
-                  : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {[...selMember.productions].sort().map(prod=>(
-                        <div key={prod} style={{ padding:"8px 12px", background:"var(--s2)",
-                          border:"1px solid var(--border)", borderRadius:8, fontSize:"0.84rem", color:"var(--text)" }}>{prod}</div>
-                      ))}
-                    </div>
-                }
-              </div>
-            </>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-              {["Sopran","Alt","Tenor","Bass"].map(voice=>{
-                const vm=memberStats
-                  .filter(m=>m.voice===voice&&(!search||
-                    m.name.toLowerCase().includes(search.toLowerCase())||
-                    m.part.toLowerCase().includes(search.toLowerCase())))
-                  .sort((a,b)=>b.prodCount-a.prodCount||a.name.localeCompare(b.name));
-                if(!vm.length) return null;
-                return (
-                  <div key={voice}>
-                    <div style={{ fontSize:"0.72rem", fontWeight:700, color:VOICE_COL[voice],
-                      textTransform:"uppercase", letterSpacing:"0.08em", padding:"8px 0 4px", marginTop:4 }}>{voice}</div>
-                    {vm.map(m=>(
-                      <button key={m.id} onClick={()=>setSelMember(m)}
-                        style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", width:"100%", marginBottom:4,
-                          background:"var(--s1)", border:"1px solid var(--border)",
-                          borderLeft:`3px solid ${VOICE_COL[m.voice]||"var(--border2)"}`,
-                          borderRadius:10, cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:"0.88rem", fontWeight:600, color:"var(--text)" }}>{m.name}</div>
-                          <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:1 }}>{m.part}</div>
-                        </div>
-                        <div style={{ textAlign:"right" }}>
-                          <div style={{ fontSize:"0.9rem", fontWeight:700, color:m.prodCount>0?VOICE_COL[m.voice]:"var(--faint)" }}>{m.prodCount}</div>
-                          <div style={{ fontSize:"0.68rem", color:"var(--faint)" }}>Prod.</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          })()}
+        </>
       )}
     </div>
   );
@@ -3270,39 +3014,6 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
 
   const myProductions = settings.myProductions || [];
 
-  const productionSeasons = settings.productionSeasons || {};
-  const toggleProduction = (prod) => {
-    const next = myProductions.includes(prod)
-      ? myProductions.filter(p => p !== prod)
-      : [...myProductions, prod];
-    // 시즌 라벨 없으면 기본값으로 현재 시즌
-    const curYear = new Date().getFullYear();
-    const curMonth = new Date().getMonth();
-    const seasonStart = curMonth >= 7 ? curYear : curYear - 1;
-    const defaultSeason = `${seasonStart}/${String(seasonStart+1).slice(2)}`;
-    const newSeasons = { ...productionSeasons };
-    if (!myProductions.includes(prod) && !newSeasons[prod]) {
-      newSeasons[prod] = defaultSeason;
-    }
-    saveSettings({ ...settings, myProductions: next, productionSeasons: newSeasons });
-  };
-  const setProductionSeason = (prod, season) => {
-    const newSeasons = { ...productionSeasons, [prod]: season };
-    saveSettings({ ...settings, productionSeasons: newSeasons });
-  };
-  // 현재 활성 시즌 계산 (25/26 시즌은 2026-07-31 까지)
-  const getActiveSeason = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const start = m >= 7 ? y : y - 1;
-    return `${start}/${String(start+1).slice(2)}`;
-  };
-  const activeSeason = getActiveSeason();
-
-  const selectAll = () => saveSettings({ ...settings, myProductions: allProductions });
-  const selectNone = () => saveSettings({ ...settings, myProductions: [] });
-
   return (
     <div className="page">
       {/* Profile hero */}
@@ -3321,110 +3032,8 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
         </div>
       </div>
 
-      {/* 내 작품 선택 */}
-      <div className="settings-section">
-        <div className="settings-title">Meine Produktionen</div>
-        <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:10 }}>
-          Nur ausgewählte Produktionen werden im Spielplan angezeigt.
-        </div>
-
-        <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-          <button className="btn btn-ghost btn-sm" onClick={selectAll}>Alle</button>
-          <button className="btn btn-ghost btn-sm" onClick={selectNone}>Keine</button>
-          <span style={{ marginLeft:"auto", fontSize:"0.74rem", color:"var(--muted)", alignSelf:"center" }}>
-            {myProductions.length} / {allProductions.length} ausgewählt
-          </span>
-        </div>
-
-        {allProductions.length === 0 && (
-          <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"10px 0" }}>
-            Noch keine Produktionen im Spielplan. Bitte Admin-Import durchführen.
-          </div>
-        )}
-
-        {/* 헤더 행 */}
-        {allProductions.length > 0 && (
-          <div style={{ display:"flex", alignItems:"center", padding:"0 14px", marginBottom:4 }}>
-            <span style={{ fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Teilnahme</span>
-            <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em", marginRight:46 }}>
-              Spielzeit
-            </span>
-            <span style={{ fontSize:"0.68rem", color:"var(--faint)", textTransform:"uppercase", letterSpacing:"0.08em" }}>
-              Neu dazu
-            </span>
-          </div>
-        )}
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          {allProductions.map(prod => {
-            const isSelected = myProductions.includes(prod);
-            const isNeuDazu = (settings.neuDazuProductions || []).includes(prod);
-            const toggleNeuDazu = (e) => {
-              e.stopPropagation();
-              const cur = settings.neuDazuProductions || [];
-              const next = isNeuDazu ? cur.filter(p => p !== prod) : [...cur, prod];
-              saveSettings({ ...settings, neuDazuProductions: next });
-            };
-            const prodSeason = productionSeasons[prod] || activeSeason;
-            // 지난 시즌(현재 활성 시즌보다 오래된) 작품은 흐리게
-            const isPastSeason = isSelected && prodSeason < activeSeason;
-            return (
-              <div key={prod} style={{ display:"flex", alignItems:"center", gap:0,
-                background: isSelected ? (isPastSeason ? "rgba(90,86,80,0.08)" : "rgba(232,23,58,0.08)") : "var(--s1)",
-                border:`1px solid ${isSelected ? (isPastSeason ? "rgba(90,86,80,0.3)" : "rgba(232,23,58,0.35)") : "var(--border)"}`,
-                borderLeft:`3px solid ${isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--border2)"}`,
-                borderRadius:10, overflow:"hidden", opacity: isPastSeason ? 0.6 : 1 }}>
-                {/* 왼쪽: 참여 체크 */}
-                <button onClick={() => toggleProduction(prod)}
-                  style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
-                    flex:1, background:"transparent", border:"none",
-                    cursor:"pointer", textAlign:"left", fontFamily:"var(--sans)" }}>
-                  <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
-                    background: isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--s2)",
-                    border:`1px solid ${isSelected ? (isPastSeason ? "var(--faint)" : "var(--accent)") : "var(--border2)"}`,
-                    display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    {isSelected && <span style={{ color:"white", fontSize:"0.7rem", fontWeight:700 }}>✓</span>}
-                  </div>
-                  <span style={{ fontSize:"0.88rem", fontWeight: isSelected ? 600 : 400,
-                    color: isSelected ? "var(--text)" : "var(--text2)" }}>
-                    {prod}
-                  </span>
-                </button>
-                {/* 가운데: 시즌 선택 드롭다운 (선택된 경우만) */}
-                {isSelected && (
-                  <select
-                    value={prodSeason}
-                    onChange={e => { e.stopPropagation(); setProductionSeason(prod, e.target.value); }}
-                    onClick={e => e.stopPropagation()}
-                    style={{ padding:"4px 6px", background:"var(--s2)", border:"none",
-                      borderLeft:"1px solid var(--border)", borderRight:"1px solid var(--border)",
-                      color: isPastSeason ? "var(--faint)" : "var(--text2)",
-                      fontFamily:"var(--sans)", fontSize:"0.74rem", cursor:"pointer",
-                      height:"100%", minWidth:72 }}>
-                    <option value="25/26">25/26</option>
-                    <option value="26/27">26/27</option>
-                    <option value="27/28">27/28</option>
-                  </select>
-                )}
-                {/* 오른쪽: Neu dazu 토글 (선택된 경우만) */}
-                {isSelected && (
-                  <button onClick={toggleNeuDazu}
-                    style={{ padding:"10px 14px", background:"transparent",
-                      border:"none", borderLeft: isSelected ? "none" : "1px solid var(--border)",
-                      cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center",
-                      gap:6, fontFamily:"var(--sans)" }}>
-                    <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
-                      background: isNeuDazu ? "var(--blue)" : "var(--s3)",
-                      border:`1px solid ${isNeuDazu ? "var(--blue)" : "var(--border2)"}`,
-                      display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      {isNeuDazu && <span style={{ color:"white", fontSize:"0.6rem", fontWeight:700 }}>✓</span>}
-                    </div>
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* 내 작품 선택 — 시즌별 */}
+      <ProductionPicker settings={settings} saveSettings={saveSettings} scheds={scheds} />
 
       {/* Darstellung */}
       <div className="settings-section">
