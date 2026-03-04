@@ -2159,6 +2159,252 @@ Format:
 // ═══════════════════════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+//  ADMIN SPIELPLAN
+// ═══════════════════════════════════════════════════════════════════════
+function AdminSpielplan({ scheds, deleteEvent, setScheds, setEditModal, toast }) {
+  const [filterMonth, setFilterMonth] = useState(todayStr.slice(0,7));
+  const [filterType,  setFilterType]  = useState("all");
+  const [cleaning,    setCleaning]    = useState(false);
+
+  // 중복 감지: 같은 날짜+시간+제목/작품 조합
+  const SOURCE_PRIORITY = { tagesplan:0, dienstplan:1, monatsplan:2, vorplanung:3 };
+  const dupGroups = (() => {
+    const groups = {};
+    scheds.forEach(e => {
+      const key = `${e.date}_${e.startTime}_${(e.production||e.title||"").toLowerCase().trim()}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(e);
+    });
+    return Object.values(groups).filter(g => g.length > 1);
+  })();
+  const dupIds = new Set(dupGroups.flatMap(g => {
+    // 우선순위 낮은 것(숫자 큰 것) = 삭제 대상
+    const sorted = [...g].sort((a,b) =>
+      (SOURCE_PRIORITY[a.sourceType]??9) - (SOURCE_PRIORITY[b.sourceType]??9)
+    );
+    return sorted.slice(1).map(e => e.id); // 첫 번째(우선순위 높은 것) 빼고 나머지
+  }));
+
+  // 월 목록
+  const months = [...new Set(scheds.map(e => e.date.slice(0,7)))].sort();
+
+  // 필터링
+  const filtered = scheds
+    .filter(e => e.date.slice(0,7) === filterMonth)
+    .filter(e => filterType === "all" ? true :
+      filterType === "vs" ? isVorstellung(e) :
+      filterType === "probe" ? isProbe(e) : isChorfrei(e))
+    .sort((a,b) => (a.date+a.startTime).localeCompare(b.date+b.startTime));
+
+  // 날짜별 그룹
+  const byDate = {};
+  filtered.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  });
+  const dateKeys = Object.keys(byDate).sort();
+
+  // 중복 자동 정리
+  const cleanDups = async () => {
+    if (dupIds.size === 0) { toast("Keine Duplikate gefunden."); return; }
+    if (!confirm(`${dupIds.size}개의 중복 일정을 삭제할까요?\n(우선순위 낮은 항목만 삭제됩니다)`)) return;
+    setCleaning(true);
+    for (const id of dupIds) await deleteEvent(id);
+    toast(`✓ ${dupIds.size}개 중복 삭제 완료`);
+    setCleaning(false);
+  };
+
+  const deleteOldProben = async () => {
+    const toDelete = scheds.filter(e => e.date < todayStr && !isVorstellung(e));
+    if (!toDelete.length) { toast("Keine alten Proben."); return; }
+    if (!confirm(`${toDelete.length}개의 지난 Proben을 삭제할까요?`)) return;
+    for (const e of toDelete) await deleteEvent(e.id);
+    toast(`✓ ${toDelete.length}개 삭제`);
+  };
+
+  return (
+    <div>
+      {/* 헤더 */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <div>
+          <span style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600, color:"var(--text)" }}>
+            Spielplan
+          </span>
+          <span style={{ marginLeft:8, fontSize:"0.74rem", color:"var(--muted)" }}>
+            {scheds.length} Einträge
+          </span>
+        </div>
+        <div style={{ marginLeft:"auto", display:"flex", gap:6, flexWrap:"wrap" }}>
+          {dupIds.size > 0 && (
+            <button onClick={cleanDups} disabled={cleaning}
+              style={{ padding:"5px 12px", borderRadius:8, border:"1px solid rgba(255,159,10,0.5)",
+                background:"rgba(255,159,10,0.12)", color:"var(--orange)",
+                fontFamily:"var(--sans)", fontSize:"0.76rem", fontWeight:600, cursor:"pointer" }}>
+              {cleaning ? "…" : `⚠ ${dupIds.size} Duplikate bereinigen`}
+            </button>
+          )}
+          <button onClick={deleteOldProben}
+            style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
+              background:"var(--s2)", color:"var(--muted)",
+              fontFamily:"var(--sans)", fontSize:"0.76rem", cursor:"pointer" }}>
+            🗑 Alte Proben
+          </button>
+          <button onClick={() => setEditModal("new")}
+            style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--accent)",
+              background:"var(--accent)", color:"#fff",
+              fontFamily:"var(--sans)", fontSize:"0.76rem", fontWeight:600, cursor:"pointer" }}>
+            + Neu
+          </button>
+        </div>
+      </div>
+
+      {/* 중복 경고 배너 */}
+      {dupIds.size > 0 && (
+        <div style={{ padding:"10px 14px", background:"rgba(255,159,10,0.08)",
+          border:"1px solid rgba(255,159,10,0.3)", borderRadius:10, marginBottom:12,
+          fontSize:"0.78rem", color:"var(--orange)" }}>
+          ⚠ {dupGroups.length}개 일정에 중복이 발견됐어요 — 우선순위 낮은 {dupIds.size}개를 자동 삭제할 수 있어요.
+        </div>
+      )}
+
+      {/* 월 탭 */}
+      <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:10 }}>
+        {months.map(m => {
+          const [y, mo] = m.split("-").map(Number);
+          const isAct = m === filterMonth;
+          const cnt = scheds.filter(e => e.date.slice(0,7) === m).length;
+          return (
+            <button key={m} onClick={() => setFilterMonth(m)}
+              style={{ padding:"4px 10px", borderRadius:16, border:`1px solid ${isAct?"var(--accent)":"var(--border)"}`,
+                background: isAct ? "var(--accent)" : "var(--s1)",
+                color: isAct ? "#fff" : "var(--text2)",
+                fontFamily:"var(--sans)", fontSize:"0.72rem",
+                fontWeight: isAct ? 700 : 400, cursor:"pointer", transition:"all 0.12s" }}>
+              {MONTHS_DE[mo-1].slice(0,3)} {String(y).slice(2)}
+              <span style={{ marginLeft:4, opacity:0.7, fontSize:"0.68em" }}>{cnt}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 타입 필터 */}
+      <div style={{ display:"flex", gap:4, marginBottom:14 }}>
+        {[["all","Alle"],["vs","VS"],["probe","Proben"],["frei","Chorfrei"]].map(([v,l]) => (
+          <button key={v} onClick={() => setFilterType(v)}
+            style={{ padding:"4px 10px", borderRadius:8,
+              border:`1px solid ${filterType===v?"var(--accent)":"var(--border)"}`,
+              background: filterType===v ? "var(--accent-dim)" : "transparent",
+              color: filterType===v ? "var(--accent)" : "var(--text2)",
+              fontFamily:"var(--sans)", fontSize:"0.74rem",
+              fontWeight: filterType===v ? 600 : 400, cursor:"pointer" }}>
+            {l}
+          </button>
+        ))}
+        <span style={{ marginLeft:"auto", fontSize:"0.72rem", color:"var(--muted)", alignSelf:"center" }}>
+          {filtered.length} Termine
+        </span>
+      </div>
+
+      {/* 날짜별 카드 리스트 */}
+      {dateKeys.length === 0 && (
+        <div style={{ textAlign:"center", color:"var(--faint)", padding:40, fontSize:"0.88rem" }}>
+          Keine Termine für diesen Monat.
+        </div>
+      )}
+      {dateKeys.map(ds => {
+        const evs = byDate[ds];
+        const d = new Date(ds+"T12:00:00");
+        const dow = ["So","Mo","Di","Mi","Do","Fr","Sa"][d.getDay()];
+        const isT = ds === todayStr;
+        const isPast = ds < todayStr;
+        return (
+          <div key={ds} style={{ marginBottom:10 }}>
+            {/* 날짜 헤더 */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+              <div style={{ width:36, height:36, borderRadius:9, flexShrink:0,
+                background: isT ? "var(--accent)" : isPast ? "var(--s2)" : "var(--s1)",
+                border:`1px solid ${isT?"var(--accent)":"var(--border)"}`,
+                display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+                <span style={{ fontSize:"0.56rem", fontWeight:700, lineHeight:1,
+                  color: isT ? "rgba(255,255,255,0.8)" : "var(--faint)", textTransform:"uppercase" }}>{dow}</span>
+                <span style={{ fontSize:"0.9rem", fontWeight:700, lineHeight:1,
+                  color: isT ? "#fff" : isPast ? "var(--faint)" : "var(--text)" }}>{d.getDate()}</span>
+              </div>
+              <div style={{ fontSize:"0.72rem", color: isT ? "var(--accent)" : "var(--muted)", fontWeight: isT ? 700 : 400 }}>
+                {MONTHS_DE[d.getMonth()]} {d.getFullYear()}
+                {isT && <span style={{ marginLeft:6, fontSize:"0.66rem", background:"var(--accent)", color:"#fff", padding:"1px 5px", borderRadius:4 }}>Heute</span>}
+              </div>
+            </div>
+
+            {/* 해당 날짜 이벤트들 */}
+            <div style={{ marginLeft:44, display:"flex", flexDirection:"column", gap:4 }}>
+              {evs.map(e => {
+                const st = getStyle(e);
+                const isDup = dupIds.has(e.id);
+                return (
+                  <div key={e.id} style={{ display:"flex", alignItems:"center", gap:0,
+                    background: isDup ? "rgba(255,159,10,0.06)" : isVorstellung(e) ? "rgba(232,23,58,0.06)" : "var(--s1)",
+                    border:`1px solid ${isDup?"rgba(255,159,10,0.4)":isVorstellung(e)?"rgba(232,23,58,0.25)":"var(--border)"}`,
+                    borderLeft:`3px solid ${isDup?"var(--orange)":st.badgeBg}`,
+                    borderRadius:9, opacity: isPast && !isVorstellung(e) ? 0.55 : 1,
+                    overflow:"hidden" }}>
+                    {/* 시간 */}
+                    <div style={{ padding:"10px 12px", textAlign:"center", minWidth:46, flexShrink:0,
+                      borderRight:"1px solid var(--border)" }}>
+                      <div style={{ fontSize:"0.84rem", fontWeight:700, color: isVorstellung(e) ? "var(--accent)" : "var(--text)",
+                        letterSpacing:"-0.02em", lineHeight:1 }}>
+                        {e.startTime && e.startTime !== "00:00" ? e.startTime.slice(0,5) : "–"}
+                      </div>
+                    </div>
+                    {/* 내용 */}
+                    <div style={{ flex:1, padding:"8px 12px", minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                        <span style={{ fontSize:"0.85rem", fontWeight:600, color:"var(--text)",
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {e.title}
+                        </span>
+                        <span style={{ fontSize:"0.62rem", fontWeight:700, flexShrink:0,
+                          background:st.badgeBg+"22", color:st.text,
+                          border:`1px solid ${st.badgeBg}44`, padding:"1px 5px", borderRadius:4 }}>
+                          {st.badge}
+                        </span>
+                        {isDup && <span style={{ fontSize:"0.6rem", background:"var(--orange)", color:"#fff",
+                          padding:"1px 4px", borderRadius:4, flexShrink:0 }}>DUP</span>}
+                        {e._edited && <span style={{ fontSize:"0.6rem", background:"var(--orange)", color:"#fff",
+                          padding:"1px 4px", borderRadius:4, flexShrink:0 }}>★</span>}
+                      </div>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                        {e.targetGroup && (
+                          <span style={{ fontSize:"0.68rem", color:"var(--muted)" }}>👥 {e.targetGroup}</span>
+                        )}
+                        {e.location && (
+                          <span style={{ fontSize:"0.68rem", color:"var(--muted)" }}>📍 {e.location}</span>
+                        )}
+                        {e.conductor && (
+                          <span style={{ fontSize:"0.68rem", color:"var(--muted)" }}>🎵 {e.conductor}</span>
+                        )}
+                        <span style={{ fontSize:"0.62rem", color:"var(--faint)", marginLeft:"auto" }}>
+                          {e.sourceType?.slice(0,4)||"dien"}
+                        </span>
+                      </div>
+                    </div>
+                    {/* 수정 버튼 */}
+                    <button onClick={() => setEditModal(e)}
+                      style={{ padding:"10px 12px", background:"transparent", border:"none",
+                        borderLeft:"1px solid var(--border)", cursor:"pointer",
+                        color:"var(--muted)", fontSize:"0.82rem", flexShrink:0 }}>✎</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
@@ -2194,50 +2440,13 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
       </div>
 
       {atab === "scheds" && (
-        <>
-          <div className="sh">
-            <h2>Spielplan ({scheds.length} Einträge)</h2>
-            <div style={{ display:"flex", gap:8 }}>
-              <button className="btn btn-danger btn-sm" onClick={async () => {
-                const toDelete = scheds.filter(e => e.date < todayStr && e.eventType !== "Vorstellung");
-                if (toDelete.length === 0) { toast("Keine alten Proben gefunden."); return; }
-                if (!confirm(`${toDelete.length}개의 지난 Probe를 삭제할까요?`)) return;
-                for (const e of toDelete) await deleteEvent(e.id);
-                toast(`✓ ${toDelete.length}개 삭제 완료`);
-              }}>🗑 Alte Proben löschen</button>
-              <button className="btn btn-gold btn-sm" onClick={() => setEditModal("new")}>+ Neuer Termin</button>
-            </div>
-          </div>
-          <div className="twrap">
-            <table>
-              <thead><tr><th>Datum</th><th>Titel</th><th>Typ</th><th>Zeit</th><th>Ort</th><th>Zielgruppe</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                {sortedScheds.map(e => {
-                  const st = getStyle(e);
-                  return (
-                    <tr key={e.id}>
-                      <td style={{ whiteSpace: "nowrap", fontSize: "0.75rem" }}>{fmtDate(e.date)}</td>
-                      <td>
-                        <span style={{ color: st.text }}>{e.title}</span>
-                        {e._edited && <span style={{ marginLeft: 4, fontSize: "0.6rem", background: "var(--orange)", color: "white", padding: "1px 4px" }}>geänd.</span>}
-                      </td>
-                      <td><span style={{ background: st.badgeBg + "33", color: st.text, border: `1px solid ${st.badgeBg}55`, padding: "1px 5px", fontSize: "0.62rem" }}>{st.badge}</span></td>
-                      <td style={{ whiteSpace: "nowrap", fontSize: "0.75rem", color: "var(--accent)" }}>{e.startTime !== "00:00" ? e.startTime : "–"}</td>
-                      <td style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{e.location}</td>
-                      <td style={{ fontSize: "0.72rem", color: "var(--muted)", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.targetGroup}</td>
-                      <td>
-                        <span className={`source-tag src-${e.sourceType || "dienstplan"}`}>{e.sourceType?.slice(0, 4) || "dien"}</span>
-                      </td>
-                      <td>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setEditModal(e)}>✎</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <AdminSpielplan
+          scheds={scheds}
+          deleteEvent={deleteEvent}
+          setScheds={setScheds}
+          setEditModal={setEditModal}
+          toast={toast}
+        />
       )}
 
       {atab === "import" && (
