@@ -171,30 +171,41 @@ function bassRequired(event) {
 // 사용자 voice/part에 따라 해당 일정인지 판단
 function isRelevantForUser(event, user) {
   if (!event || !event.targetGroup) return true;
-  const g = event.targetGroup.toLowerCase();
+  const g = event.targetGroup.trim().toLowerCase();
   const voice = (user?.voice || "").toLowerCase();
   const part  = (user?.part  || "").toLowerCase();
 
-  if (g.includes("alle eingeteilten") || g === "alle" || g.includes("alle stimmgruppen")) return true;
+  // "Alle Eingeteilten" 단독이거나 "Alle" / "Alle Stimmgruppen"만 → 전체 공개
+  if (g === "alle eingeteilten" || g === "alle" || g === "alle stimmgruppen") return true;
 
   const isFemale = voice === "sopran" || voice === "alt" ||
                    part.includes("sopran") || part.includes("alt");
   const isMale   = voice === "tenor" || voice === "bass" ||
                    part.includes("tenor") || part.includes("bass");
 
-  if (g.includes("damen") || g.includes("frauen")) {
-    if (g.includes("herren")) return true;
-    return isFemale;
-  }
-  if (g.includes("herren")) {
-    if (g.includes("damen")) return true;
-    return isMale;
-  }
-  if (g.includes("sopran")) return voice === "sopran" || part.includes("sopran");
-  if (g.includes("alt"))    return voice === "alt"    || part.includes("alt");
-  if (g.includes("tenor"))  return voice === "tenor"  || part.includes("tenor");
-  if (g.includes("bass"))   return voice === "bass"   || part.includes("bass");
+  // Damen / Frauen 키워드 → 여성 전용 (Herren도 포함된 경우 제외)
+  const hasDamen  = g.includes("damen") || g.includes("frauen");
+  const hasHerren = g.includes("herren") || g.includes("männer");
 
+  if (hasDamen && hasHerren) return true;   // 양쪽 모두 명시 → 전체
+  if (hasDamen)  return isFemale;
+  if (hasHerren) return isMale;
+
+  // 특정 Stimmgruppe 명시 (콤마 분리 지원: "Tenor, Alt")
+  const parts = g.split(/[,;]+/).map(s => s.trim());
+  const voiceMatch = (tok) =>
+    (tok.includes("sopran")  && (voice === "sopran" || part.includes("sopran"))) ||
+    (tok.includes("alt")     && (voice === "alt"    || part.includes("alt"))) ||
+    (tok.includes("tenor")   && (voice === "tenor"  || part.includes("tenor"))) ||
+    (tok.includes("bass")    && (voice === "bass"   || part.includes("bass")));
+
+  const hasVoiceKeyword = parts.some(tok =>
+    tok.includes("sopran") || tok.includes("alt") ||
+    tok.includes("tenor")  || tok.includes("bass")
+  );
+  if (hasVoiceKeyword) return parts.some(voiceMatch);
+
+  // 그 외 (알 수 없는 targetGroup) → 보여줌
   return true;
 }
 
