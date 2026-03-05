@@ -1442,10 +1442,136 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
 }
 
 // ── Tag (Day) ──
+// ═══════════════════════════════════════════════════════════════════════
+//  WEATHER BAR — Dresden Altstadt (open-meteo, kein API-Key nötig)
+// ═══════════════════════════════════════════════════════════════════════
+// WMO 날씨 코드 → 아이콘 + 독일어 텍스트
+function wmoInfo(code) {
+  if (code === 0)              return { icon:"☀️", label:"Sonnig" };
+  if (code === 1)              return { icon:"🌤", label:"Überwiegend klar" };
+  if (code === 2)              return { icon:"⛅️", label:"Teilweise bewölkt" };
+  if (code === 3)              return { icon:"☁️", label:"Bedeckt" };
+  if (code <= 49)              return { icon:"🌫", label:"Nebel" };
+  if (code <= 55)              return { icon:"🌦", label:"Nieselregen" };
+  if (code <= 67)              return { icon:"🌧", label:"Regen" };
+  if (code <= 77)              return { icon:"❄️", label:"Schnee" };
+  if (code <= 82)              return { icon:"🌧", label:"Starkregen" };
+  if (code <= 86)              return { icon:"🌨", label:"Schneeschauer" };
+  if (code <= 99)              return { icon:"⛈", label:"Gewitter" };
+  return { icon:"🌡", label:"–" };
+}
+
+// 자전거 추천 여부
+function bikeAdvice(weather) {
+  if (!weather) return null;
+  const { temp, rain, windspeed, wmo } = weather;
+  const isRain = rain > 0.3 || (wmo >= 51 && wmo <= 82);
+  const isSnow = wmo >= 71 && wmo <= 77;
+  const isCold = temp < 2;
+  const isWind = windspeed > 40;
+  if (isSnow || isCold) return { ok: false, reason: "Schnee / Glatteis — Fahrrad nicht empfohlen" };
+  if (isRain)           return { ok: false, reason: "Regen — Regenschutz empfohlen" };
+  if (isWind)           return { ok: false, reason: "Starker Wind — Vorsicht beim Radfahren" };
+  return { ok: true, reason: "Gutes Radwetter 🚲" };
+}
+
+function useWeather(dates) {
+  const [data, setData] = React.useState({});
+  React.useEffect(() => {
+    if (!dates || dates.length === 0) return;
+    const sorted = [...dates].sort();
+    const start = sorted[0]; const end = sorted[sorted.length - 1];
+    // Dresden Altstadt: 51.0504, 13.7373
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=51.0504&longitude=13.7373` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max` +
+      `&hourly=temperature_2m,weathercode,precipitation,windspeed_10m` +
+      `&timezone=Europe%2FBerlin&start_date=${start}&end_date=${end}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(json => {
+        const result = {};
+        (json.daily?.time || []).forEach((d, i) => {
+          result[d] = {
+            wmo:       json.daily.weathercode[i],
+            tempMax:   Math.round(json.daily.temperature_2m_max[i]),
+            tempMin:   Math.round(json.daily.temperature_2m_min[i]),
+            rain:      json.daily.precipitation_sum[i] || 0,
+            windspeed: Math.round(json.daily.windspeed_10m_max[i] || 0),
+            // 저녁 시간대 (17~21시) 대표값
+            temp:      (() => {
+              const idx17 = (json.hourly?.time || []).findIndex(t => t === `${d}T19:00`);
+              return idx17 >= 0 ? Math.round(json.hourly.temperature_2m[idx17]) : Math.round(json.daily.temperature_2m_max[i]);
+            })(),
+          };
+        });
+        setData(result);
+      })
+      .catch(() => {});
+  }, [dates.join(",")]);
+  return data;
+}
+
+// 단일 날짜용 날씨 카드
+function WeatherBar({ date }) {
+  const weatherMap = useWeather([date]);
+  const w = weatherMap[date];
+  if (!w) return (
+    <div style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 12px",
+      background:"var(--s1)", border:"1px solid var(--border)", borderRadius:10,
+      marginBottom:12, fontSize:"0.74rem", color:"var(--faint)" }}>
+      🌡 Wetter wird geladen…
+    </div>
+  );
+  const { icon, label } = wmoInfo(w.wmo);
+  const bike = bikeAdvice(w);
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px",
+      background:"var(--s1)", border:"1px solid var(--border)", borderRadius:10,
+      marginBottom:12, flexWrap:"wrap" }}>
+      <span style={{ fontSize:"1.3rem", lineHeight:1 }}>{icon}</span>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:"0.88rem", fontWeight:700, color:"var(--text)" }}>
+            {w.tempMax}° <span style={{ fontSize:"0.72rem", fontWeight:400, color:"var(--muted)" }}>/ {w.tempMin}°</span>
+          </span>
+          <span style={{ fontSize:"0.76rem", color:"var(--text2)" }}>{label}</span>
+          {w.rain > 0 && <span style={{ fontSize:"0.72rem", color:"var(--blue)" }}>💧 {w.rain.toFixed(1)} mm</span>}
+          {w.windspeed > 20 && <span style={{ fontSize:"0.72rem", color:"var(--muted)" }}>💨 {w.windspeed} km/h</span>}
+        </div>
+        <div style={{ fontSize:"0.7rem", marginTop:2,
+          color: bike?.ok ? "var(--green,#34C759)" : "var(--orange)" }}>
+          {bike?.reason}
+        </div>
+      </div>
+      <div style={{ fontSize:"0.62rem", color:"var(--faint)", alignSelf:"flex-end" }}>
+        Dresden Altstadt
+      </div>
+    </div>
+  );
+}
+
+// 주간 날씨 (WeekView용) — 날짜 배열 받아서 각 날짜 옆에 간단 날씨 표시
+function WeatherInline({ date, weatherMap }) {
+  const w = weatherMap[date];
+  if (!w) return <span style={{ fontSize:"0.68rem", color:"var(--faint)" }}>…</span>;
+  const { icon } = wmoInfo(w.wmo);
+  const bike = bikeAdvice(w);
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:4,
+      fontSize:"0.72rem", color:"var(--text2)", marginLeft:"auto" }}>
+      <span>{icon}</span>
+      <span style={{ fontWeight:600, color:"var(--text)" }}>{w.tempMax}°</span>
+      <span style={{ color:"var(--muted)" }}>{w.tempMin}°</span>
+      {!bike?.ok && <span style={{ fontSize:"0.66rem", color:"var(--orange)" }}>🚲✗</span>}
+    </span>
+  );
+}
+
 function DayView({ selDate, evsByDate, myFilter, user, isChanged }) {
   const evs = myFilter(evsByDate(selDate));
   return (
     <div>
+      <WeatherBar date={selDate} />
       {evs.length === 0
         ? <div className="empty">Kein Termin an diesem Tag.</div>
         : evs.map(e => <EvCard key={e.id} e={e} user={user} changed={isChanged(e)} />)
@@ -1460,6 +1586,7 @@ function WeekView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate })
   const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay()+6)%7));
   const days = Array.from({length:7}, (_,i) => { const x = new Date(mon); x.setDate(mon.getDate()+i); return fmtD(x); });
 
+  const weatherMap = useWeather(days);
   return (
     <div>
       {days.map(ds => {
@@ -1468,7 +1595,7 @@ function WeekView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate })
         const isT = ds === todayStr;
         return (
           <div key={ds} style={{ marginBottom:16 }}>
-            <div onClick={() => setSelDate(ds)} style={{ display:"flex", alignItems:"baseline", gap:8, paddingBottom:6,
+            <div onClick={() => setSelDate(ds)} style={{ display:"flex", alignItems:"center", gap:8, paddingBottom:6,
               borderBottom:`2px solid ${isT ? "var(--accent)" : "var(--border)"}`, marginBottom:8, cursor:"pointer" }}>
               <span style={{ fontSize:"0.72rem", fontWeight:600, color: isT ? "var(--accent)" : "var(--muted)", textTransform:"uppercase", letterSpacing:"0.05em" }}>
                 {WEEKDAYS_FULL[dd.getDay()].slice(0,2)}
@@ -1477,7 +1604,8 @@ function WeekView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate })
                 {dd.getDate()}
               </span>
               <span style={{ fontSize:"0.78rem", color:"var(--muted)" }}>{MONTHS_DE[dd.getMonth()].slice(0,3)}</span>
-              {evs.some(isChanged) && <span style={{ marginLeft:"auto", fontSize:"0.78rem", color:"var(--orange)" }}>★</span>}
+              {evs.some(isChanged) && <span style={{ fontSize:"0.78rem", color:"var(--orange)" }}>★</span>}
+              <WeatherInline date={ds} weatherMap={weatherMap} />
             </div>
             {evs.length === 0
               ? <div style={{ fontSize:"0.8rem", color:"var(--faint)", padding:"6px 0 4px", fontStyle:"italic" }}>Kein Termin</div>
