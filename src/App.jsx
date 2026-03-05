@@ -620,6 +620,11 @@ body {
 .pip { width: 100%; padding: 1px 4px; font-size: 0.58rem; font-weight: 500; margin-bottom: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-radius: 3px; }
 .pip.dimmed { opacity: 0.3; }
 .vs-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); display: inline-block; margin-right: 3px; flex-shrink: 0; }
+/* 비정상 연주 시간 경고 — 다크: 노랑, 라이트: 빨강 */
+.unusual-time { color: #FFD60A; background: rgba(255,214,10,0.12); border: 1px solid rgba(255,214,10,0.35); }
+.unusual-time-badge { font-size: 0.58rem; font-weight: 800; color: #FFD60A; background: rgba(255,214,10,0.15); border-radius: 3px; padding: 0px 3px; line-height: 14px; display: inline-block; }
+[data-theme="light"] .unusual-time { color: #C0392B; background: rgba(192,57,43,0.10); border: 1px solid rgba(192,57,43,0.35); }
+[data-theme="light"] .unusual-time-badge { color: #C0392B; background: rgba(192,57,43,0.12); }
 
 /* ── Day detail ── */
 .dd-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 10px; margin-bottom: 10px; }
@@ -1271,10 +1276,9 @@ function EvCard({ e, user, compact = false, changed = false }) {
           {e.startTime && e.startTime !== "00:00" && (() => {
             const isUnusual = isVorstellung(e) && !e.startTime.startsWith("19");
             return (
-              <div className="ecard-time" style={ isUnusual ? {
-                color: "#FFD60A", fontWeight: 800, fontSize: "0.9rem",
-                background: "rgba(255,214,10,0.12)", borderRadius: 5,
-                padding: "1px 6px", border: "1px solid rgba(255,214,10,0.35)"
+              <div className="ecard-time unusual-time" style={ isUnusual ? {
+                fontWeight: 800, fontSize: "0.9rem",
+                borderRadius: 5, padding: "1px 6px",
               } : {}}>
                 {isUnusual && "⚠ "}{e.startTime}{e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : ""}
               </div>
@@ -1547,9 +1551,7 @@ function MonthView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate, 
               )}
               {/* 비정상 VS 시간 경고 */}
               {unusualVS.length > 0 && (
-                <div style={{ fontSize:"0.58rem", fontWeight:800, color:"#FFD60A",
-                  background:"rgba(255,214,10,0.15)", borderRadius:3, padding:"0px 3px",
-                  lineHeight:"14px", display:"inline-block" }}>
+                <div className="unusual-time-badge">
                   ⏰{unusualVS[0].startTime.slice(0,5)}
                 </div>
               )}
