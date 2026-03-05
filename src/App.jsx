@@ -1327,13 +1327,20 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
     const knownProds = [...new Set(scheds.map(e => e.production).filter(Boolean))];
     const sortedKnown = [...knownProds].sort((a,b) => b.length - a.length);
     // 중복 제거: production 정규화 후 같은 시간+작품은 더 상세한 소스 우선
+    // 단, Parsifal(및 분리 편성 작품)은 targetGroup이 달라도 각각 표시
+    const SPLIT_PRODUCTIONS = ["parsifal", "elias"];
+    const isSplitProd = (e) => {
+      const p = (e.production || e.title || "").toLowerCase();
+      return SPLIT_PRODUCTIONS.some(s => p.includes(s));
+    };
     const deduped = Object.values(
       dayEvs.reduce((acc, e) => {
         const normProd = e.production ? normalizeProduction(e.production, sortedKnown) : e.title;
-        const key = `${e.startTime}_${normProd}`;
+        // 분리 편성 작품은 targetGroup도 키에 포함 → 그룹별로 독립 표시
+        const tgKey = isSplitProd(e) ? `_${(e.targetGroup||"").toLowerCase().replace(/\s+/g,"")}` : "";
+        const key = `${e.startTime}_${normProd}${tgKey}`;
         const existing = acc[key];
         if (!existing || (SOURCE_PRIORITY[e.sourceType] ?? 9) < (SOURCE_PRIORITY[existing.sourceType] ?? 9)) {
-          // production 필드도 정규화된 이름으로 교체
           acc[key] = { ...e, production: e.production ? normalizeProduction(e.production, sortedKnown) : e.production };
         }
         return acc;
