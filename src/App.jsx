@@ -610,13 +610,13 @@ body {
 
 .calgrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; }
 .dow { text-align: center; padding: 5px 2px 6px; font-size: 0.66rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
-.cell { background: var(--s1); min-height: 62px; padding: 5px; cursor: pointer; border-radius: 8px; transition: background 0.1s; border: 1px solid transparent; }
+.cell { background: var(--s1); min-height: 52px; padding: 4px; cursor: pointer; border-radius: 7px; transition: background 0.1s; border: 1px solid transparent; position: relative; }
 .cell:hover { background: var(--s2); }
 .cell.other { opacity: 0.3; pointer-events: none; background: transparent; }
 .cell.today { border-color: var(--accent); background: rgba(232,23,58,0.06); }
 .cell.today .dn { color: var(--accent); font-weight: 700; }
 .cell.sel { background: rgba(232,23,58,0.12); border-color: var(--accent); }
-.dn { font-size: 0.72rem; font-weight: 500; color: var(--muted); margin-bottom: 3px; }
+.dn { font-size: 0.7rem; font-weight: 500; color: var(--muted); margin-bottom: 2px; }
 .pip { width: 100%; padding: 1px 4px; font-size: 0.58rem; font-weight: 500; margin-bottom: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-radius: 3px; }
 .pip.dimmed { opacity: 0.3; }
 .vs-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); display: inline-block; margin-right: 3px; flex-shrink: 0; }
@@ -1268,9 +1268,18 @@ function EvCard({ e, user, compact = false, changed = false }) {
           {e.production && <div className="ecard-prod">{e.production}{e.conductor && ` · ${e.conductor}`}</div>}
         </div>
         <div className="ecard-right">
-          {e.startTime && e.startTime !== "00:00" && (
-            <div className="ecard-time">{e.startTime}{e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : ""}</div>
-          )}
+          {e.startTime && e.startTime !== "00:00" && (() => {
+            const isUnusual = isVorstellung(e) && !e.startTime.startsWith("19");
+            return (
+              <div className="ecard-time" style={ isUnusual ? {
+                color: "#FFD60A", fontWeight: 800, fontSize: "0.9rem",
+                background: "rgba(255,214,10,0.12)", borderRadius: 5,
+                padding: "1px 6px", border: "1px solid rgba(255,214,10,0.35)"
+              } : {}}>
+                {isUnusual && "⚠ "}{e.startTime}{e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : ""}
+              </div>
+            );
+          })()}
           <div style={{ textAlign: "right", marginTop: 4 }}>
             <span className="type-badge" style={{ background: st.badgeBg, color: st.badgeText }}>{st.badge}</span>
           </div>
@@ -1495,26 +1504,57 @@ function MonthView({ selDate, evsByDate, myFilter, user, isChanged, setSelDate, 
           const hasChange = evs.some(isChanged);
           const isT  = ds === todayStr;
           const isSel = ds === selDate;
+          const isFrei = !hasVS && evs.length > 0 && evs.every(isChorfrei);
+          // Probe 약어: MP = Musikalische Probe, SP = Szenische/Bühnprobe
+          const probeEvs = myEvs.filter(e => !isVorstellung(e) && !isChorfrei(e));
+          const hasMp = probeEvs.some(e =>
+            e.eventType === "Musikalische Probe" || e.eventType === "Konzertprobe"
+          );
+          const hasSp = probeEvs.some(e =>
+            e.eventType !== "Musikalische Probe" && e.eventType !== "Konzertprobe"
+          );
+          // VS 시간 이상 여부 (19:00 외의 시간)
+          const vsEvsList = evs.filter(isVorstellung);
+          const unusualVS = vsEvsList.filter(e => e.startTime && e.startTime !== "00:00" && !e.startTime.startsWith("19"));
           return (
             <div key={i} className={`cell${isT?" today":""}${isSel?" sel":""}`}
               onClick={() => { setSelDate(ds); setViewMode("tag"); }}>
               <div className="dn">{day}</div>
-              {hasVS && <div style={{ display:"flex", alignItems:"center", gap:2, marginBottom:2 }}>
-                <span className="vs-dot" />
-                <span style={{ fontSize:"0.56rem", color:"#FF6B61", overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis", maxWidth:"90%" }}>
-                  {evs.filter(isVorstellung).map(e => e.production||e.title).join(", ")}
-                </span>
-              </div>}
-              {myEvs.filter(e => !isVorstellung(e) && !isChorfrei(e)).slice(0,2).map(e => {
-                const st = getStyle(e);
-                return (
-                  <div key={e.id} className="pip" style={{ borderLeftColor:st.leftBorder, color:st.text, background:st.bg }}>
-                    {e.startTime !== "00:00" ? e.startTime+" " : ""}{e.title}
-                  </div>
-                );
-              })}
-              {isChorfrei(evs[0]) && !hasVS && <div style={{ fontSize:"0.58rem", color:"var(--faint)", fontStyle:"italic" }}>frei</div>}
-              {hasChange && <div style={{ position:"absolute", top:3, right:3, width:6, height:6, borderRadius:"50%", background:"var(--orange)" }} />}
+              {/* Vorstellung 배지 */}
+              {hasVS && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:"2px", marginBottom:2 }}>
+                  {vsEvsList.map((e,i) => (
+                    <span key={i} style={{
+                      display:"inline-block", fontSize:"0.54rem", fontWeight:700,
+                      background:"transparent", color:"var(--accent)",
+                      border:"1px solid var(--accent)", borderRadius:3,
+                      padding:"0px 3px", lineHeight:"14px", maxWidth:"100%",
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"
+                    }}>
+                      {(e.production||e.title||"VS").slice(0,8)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Probe 약어 */}
+              {(hasMp || hasSp) && (
+                <div style={{ display:"flex", gap:2, marginBottom:1 }}>
+                  {hasMp && <span style={{ fontSize:"0.54rem", fontWeight:700, color:"var(--blue)",
+                    background:"rgba(46,123,219,0.12)", borderRadius:3, padding:"0px 3px", lineHeight:"14px" }}>MP</span>}
+                  {hasSp && <span style={{ fontSize:"0.54rem", fontWeight:700, color:"var(--orange)",
+                    background:"rgba(255,159,10,0.12)", borderRadius:3, padding:"0px 3px", lineHeight:"14px" }}>SP</span>}
+                </div>
+              )}
+              {/* 비정상 VS 시간 경고 */}
+              {unusualVS.length > 0 && (
+                <div style={{ fontSize:"0.58rem", fontWeight:800, color:"#FFD60A",
+                  background:"rgba(255,214,10,0.15)", borderRadius:3, padding:"0px 3px",
+                  lineHeight:"14px", display:"inline-block" }}>
+                  ⏰{unusualVS[0].startTime.slice(0,5)}
+                </div>
+              )}
+              {isFrei && <div style={{ fontSize:"0.56rem", color:"var(--faint)", fontStyle:"italic" }}>frei</div>}
+              {hasChange && <div style={{ position:"absolute", top:3, right:3, width:5, height:5, borderRadius:"50%", background:"var(--orange)" }} />}
             </div>
           );
         })}
