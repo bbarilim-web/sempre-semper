@@ -72,6 +72,16 @@ const PRODUCTION_ALIASES = {
   "karmelitinnen": "Karmelitinnen",
   "florentiner hut": "Ein Florentiner Hut",
   "ein florentiner hut": "Ein Florentiner Hut",
+  // Cavalleria rusticana / Pagliacci — 항상 함께 공연되므로 하나로 통합
+  "cav":                        "Cavalleria rusticana / Pagliacci",
+  "pag":                        "Cavalleria rusticana / Pagliacci",
+  "cav/pag":                    "Cavalleria rusticana / Pagliacci",
+  "cavalleria":                 "Cavalleria rusticana / Pagliacci",
+  "cavalleria rusticana":       "Cavalleria rusticana / Pagliacci",
+  "pagliacci":                  "Cavalleria rusticana / Pagliacci",
+  "cav / pag":                  "Cavalleria rusticana / Pagliacci",
+  "cavalleria / pagliacci":     "Cavalleria rusticana / Pagliacci",
+  "cavalleria rusticana / pagliacci": "Cavalleria rusticana / Pagliacci",
 };
 
 const normalizeProduction = (name, knownProductions = []) => {
