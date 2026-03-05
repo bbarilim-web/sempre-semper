@@ -621,10 +621,11 @@ body {
 .pip.dimmed { opacity: 0.3; }
 .vs-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); display: inline-block; margin-right: 3px; flex-shrink: 0; }
 /* 비정상 연주 시간 경고 — 다크: 노랑, 라이트: 빨강 */
-.unusual-time { color: #FFD60A; background: rgba(255,214,10,0.12); border: 1px solid rgba(255,214,10,0.35); }
-.unusual-time-badge { font-size: 0.58rem; font-weight: 800; color: #FFD60A; background: rgba(255,214,10,0.15); border-radius: 3px; padding: 0px 3px; line-height: 14px; display: inline-block; }
-[data-theme="light"] .unusual-time { color: #C0392B; background: rgba(192,57,43,0.10); border: 1px solid rgba(192,57,43,0.35); }
-[data-theme="light"] .unusual-time-badge { color: #C0392B; background: rgba(192,57,43,0.12); }
+/* 비정상 연주시간 경고 — 텍스트 색 유지, 배경+테두리로만 강조 */
+.unusual-time { background: rgba(255,214,10,0.15); border: 1px solid rgba(255,214,10,0.5); border-radius: 5px; padding: 1px 6px; }
+.unusual-time-badge { font-size: 0.58rem; font-weight: 800; color: var(--text); background: rgba(255,214,10,0.18); border: 1px solid rgba(255,214,10,0.45); border-radius: 3px; padding: 0px 3px; line-height: 14px; display: inline-block; }
+[data-theme="light"] .unusual-time { background: rgba(192,57,43,0.10); border: 1px solid rgba(192,57,43,0.45); }
+[data-theme="light"] .unusual-time-badge { color: var(--text); background: rgba(192,57,43,0.10); border: 1px solid rgba(192,57,43,0.4); }
 
 /* ── Day detail ── */
 .dd-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 10px; margin-bottom: 10px; }
@@ -1276,10 +1277,7 @@ function EvCard({ e, user, compact = false, changed = false }) {
           {e.startTime && e.startTime !== "00:00" && (() => {
             const isUnusual = isVorstellung(e) && !e.startTime.startsWith("19");
             return (
-              <div className="ecard-time unusual-time" style={ isUnusual ? {
-                fontWeight: 800, fontSize: "0.9rem",
-                borderRadius: 5, padding: "1px 6px",
-              } : {}}>
+              <div className={`ecard-time${isUnusual ? " unusual-time" : ""}`}>
                 {isUnusual && "⚠ "}{e.startTime}{e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : ""}
               </div>
             );
