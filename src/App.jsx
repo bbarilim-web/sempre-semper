@@ -2113,6 +2113,53 @@ function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
       : vsOnly === "proben"
       ? "NUR Proben extrahieren (BP, BO, GP, OHP, KHP, KP, TE, Bel). Vorstellungen (VS) IGNORIEREN."
       : "Alle Termine extrahieren (VS, BP, BO, GP, OHP, KHP, KP, TE, Bel, chorfrei).";
+
+    // Vorplanung 페이지별 달 매핑 (2026/27 시즌 기준)
+    const vorplanungPageMap = {
+      1: { left: [8,2026],  mid: [9,2026],  right: [10,2026] },
+      2: { left: [11,2026], mid: [12,2026], right: [1,2027]  },
+      3: { left: [2,2027],  mid: [3,2027],  right: [4,2027]  },
+      4: { left: [5,2027],  mid: [6,2027],  right: [7,2027]  },
+    };
+    const DE_MONTHS = ["","Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+    const pad = n => String(n).padStart(2,'0');
+
+    let vorplanungHint = "";
+    if (sourceType === "vorplanung") {
+      const singlePage = (pageFrom === pageTo) ? pageFrom : null;
+      if (singlePage && vorplanungPageMap[singlePage]) {
+        const m = vorplanungPageMap[singlePage];
+        const [lM,lY] = m.left; const [mM,mY] = m.mid; const [rM,rY] = m.right;
+        vorplanungHint = `
+
+╔══════════════════════════════════════════════════════════════╗
+║  LAYOUT DIESER SEITE — 3-SPALTEN-FORMAT (STRIKT EINHALTEN!) ║
+╚══════════════════════════════════════════════════════════════╝
+
+Diese Seite hat DREI Spalten nebeneinander. Jede Spalte enthält NUR einen Monat.
+
+  LINKE Spalte   = ${DE_MONTHS[lM]} ${lY}  → date: ${lY}-${pad(lM)}-TT
+  MITTLERE Spalte = ${DE_MONTHS[mM]} ${mY} → date: ${mY}-${pad(mM)}-TT
+  RECHTE Spalte  = ${DE_MONTHS[rM]} ${rY}  → date: ${rY}-${pad(rM)}-TT
+
+REGELN:
+1. Die Zahl am Zeilenanfang (1., 2., 3. …) ist der TAG des Monats dieser Spalte.
+2. Ein Eintrag gehört IMMER NUR zum Monat seiner Spalte — KEINE Ausnahmen!
+3. Beispiel: "4." in der LINKEN Spalte → ${lY}-${pad(lM)}-04 (NICHT ${mY}-${pad(mM)}-04!)
+4. Jede Zeile kann 2 Termine haben (z.B. "10 BP Tosca" + "19 VS Carmen") = 2 JSON-Einträge mit gleichem Datum.
+5. Halbe cf-Tage (½ cf) = chorfrei bis 13 Uhr oder ab 13 Uhr, als note "½ cf" vermerken.`;
+      } else {
+        vorplanungHint = `
+
+LAYOUT DER VORPLANUNG (3-SPALTEN-FORMAT):
+Seite 1: Aug 2026 | Sep 2026 | Okt 2026
+Seite 2: Nov 2026 | Dez 2026 | Jan 2027
+Seite 3: Feb 2027 | Mär 2027 | Apr 2027
+Seite 4: Mai 2027 | Jun 2027 | Jul 2027
+Jede Spalte = nur 1 Monat. Tageszahlen gelten NUR für den Spalten-Monat!`;
+      }
+    }
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -2129,7 +2176,8 @@ Du analysierst Proben- und Spielpläne und extrahierst Termine.
 
 Abkürzungen: VS=Vorstellung, BP=Bühnenprobe, BO=Bühnenorchesterprobe, GP=Generalprobe,
 KHP=Kleines Hauptprobe, OHP=Orchesterhauptprobe, TE=Toneinspielung,
-Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei
+Bel=Beleuchtungsprobe, KP=Konzertprobe, cf=chorfrei, TP=Tonprobe, Ab=Abnahme, Auf=Aufführung, Bel=Beleuchtungsprobe
+${vorplanungHint}
 
 ${vsFilter}
 
@@ -2139,13 +2187,19 @@ Beginne direkt mit [ und ende mit ]
 Format:
 {"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"00:00","eventType":"Vorstellung","title":"Stückname","production":"Stückname","location":"Bühne","targetGroup":"Alle Eingeteilten","conductor":"","note":"","sourceType":"${sourceType}"}
 
-- Wenn Uhrzeit unbekannt: "00:00"
+eventType-Mapping: VS→"Vorstellung", BP→"Bühnenprobe", BO→"Bühnenorchesterprobe",
+GP→"Generalprobe", OHP→"Orchesterhauptprobe", KHP→"Kleines Hauptprobe",
+KP→"Konzertprobe", TE→"Toneinspielung", Bel→"Beleuchtungsprobe", cf→"Chorfrei"
+
+- startTime: zweistellig HH:MM (z.B. "08:00", "19:00", "10:00")
+- Wenn Uhrzeit fehlt: "00:00"
+- sourceType immer "${sourceType}"
 - Antworte AUSSCHLIESSLICH mit dem JSON-Array`,
         messages: [{
           role: "user",
           content: [
             { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-            { type: "text", text: `Analysiere ${pageHint} und extrahiere die Termine als JSON-Array.` }
+            { type: "text", text: `Analysiere ${pageHint} und extrahiere die Termine als JSON-Array. Achte UNBEDINGT auf die korrekte Spaltenzuordnung — jede Spalte gehört zu genau einem Monat!` }
           ]
         }]
       })
