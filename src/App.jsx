@@ -1476,8 +1476,8 @@ function bikeAdvice(weather) {
 }
 
 function useWeather(dates) {
-  const [data, setData] = React.useState({});
-  React.useEffect(() => {
+  const [data, setData] = useState({});
+  useEffect(() => {
     if (!dates || dates.length === 0) return;
     const sorted = [...dates].sort();
     const start = sorted[0]; const end = sorted[sorted.length - 1];
