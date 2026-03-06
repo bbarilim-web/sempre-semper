@@ -762,8 +762,8 @@ body {
 .src-tagesplan  { background: rgba(255,69,58,0.15);  color: #FF453A; }
 
 /* ── Admin ── */
-.atabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; gap: 0; }
-.atab { padding: 8px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 500; cursor: pointer; transition: all 0.15s; margin-bottom: -1px; }
+.atabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; } .atabs::-webkit-scrollbar { display: none; }
+.atab { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 500; cursor: pointer; transition: all 0.15s; margin-bottom: -1px; }
 .atab.on { color: var(--accent); border-bottom-color: var(--accent); }
 .atab:hover { color: var(--text); }
 
@@ -2834,6 +2834,457 @@ function AdminSpielplan({ scheds, deleteEvent, setScheds, setEditModal, toast })
 // ═══════════════════════════════════════════════════════════════════════
 //  BESETZUNGSSTATISTIK
 // ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DIENSTPLAN EDITOR  — für Chorbüro
+// ═══════════════════════════════════════════════════════════════════════
+function DienstplanEditor({ scheds, setScheds, deleteEvent, toast }) {
+  const today = new Date();
+  const getMonday = (d) => {
+    const dt = new Date(d);
+    const day = dt.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    dt.setDate(dt.getDate() + diff);
+    return dt;
+  };
+  const fmtDate = (d) => {
+    const dt = new Date(d);
+    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  };
+  const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate()+n); return dt; };
+  const DE_DAYS = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+  const DE_DAYS_FULL = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+  const DE_MONTHS = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+
+  const [weekStart, setWeekStart] = useState(() => getMonday(today));
+  const [editEvt, setEditEvt] = useState(null); // null | "new:{date}" | event object
+  const [printMode, setPrintMode] = useState(false);
+  const [standDate, setStandDate] = useState(() => {
+    const d = new Date();
+    return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getFullYear()}`;
+  });
+
+  const weekDays = Array.from({length:7}, (_,i) => addDays(weekStart, i));
+  const weekDayStrs = weekDays.map(d => fmtDate(d));
+
+  const weekEvts = scheds
+    .filter(e => weekDayStrs.includes(e.date))
+    .sort((a,b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+
+  const evtsForDay = (dateStr) => weekEvts.filter(e => e.date === dateStr);
+
+  const EVENT_TYPES = [
+    { key:"Musikalische Probe",    short:"MP",  color:"#2E7BDB", bg:"rgba(46,123,219,0.12)" },
+    { key:"Bühnenprobe",           short:"BP",  color:"#E8920A", bg:"rgba(232,146,10,0.12)" },
+    { key:"Bühnenorchesterprobe",  short:"BO",  color:"#E8920A", bg:"rgba(232,146,10,0.12)" },
+    { key:"Generalprobe",          short:"GP",  color:"#C0392B", bg:"rgba(192,57,43,0.12)"  },
+    { key:"Orchesterhauptprobe",   short:"OHP", color:"#C0392B", bg:"rgba(192,57,43,0.12)"  },
+    { key:"Kleines Hauptprobe",    short:"KHP", color:"#8E44AD", bg:"rgba(142,68,173,0.12)" },
+    { key:"Konzertprobe",          short:"KP",  color:"#2DB34A", bg:"rgba(45,179,74,0.12)"  },
+    { key:"Toneinspielung",        short:"TE",  color:"#16A085", bg:"rgba(22,160,133,0.12)" },
+    { key:"Beleuchtungsprobe",     short:"Bel", color:"#7F8C8D", bg:"rgba(127,140,141,0.12)"},
+    { key:"Vorstellung",           short:"VS",  color:"#E8173A", bg:"rgba(232,23,58,0.12)"  },
+    { key:"Chorfrei",              short:"cf",  color:"#95A5A6", bg:"rgba(149,165,166,0.12)" },
+    { key:"Sonstiges",             short:"So",  color:"#636E72", bg:"rgba(99,110,114,0.12)" },
+  ];
+  const typeInfo = (key) => EVENT_TYPES.find(t => t.key === key) || EVENT_TYPES[EVENT_TYPES.length-1];
+  const isChFrei = (e) => e.eventType === "Chorfrei";
+
+  // ── 이벤트 저장/삭제 ──────────────────────────────────────
+  const saveEvent = (data) => {
+    if (data.id) {
+      setScheds(scheds.map(e => e.id === data.id ? {...data, updatedAt:Date.now(), _edited:true} : e));
+      toast("✓ Termin aktualisiert");
+    } else {
+      const newEvt = {...data, id:"dp"+Date.now()+Math.random().toString(36).slice(2,5), updatedAt:Date.now(), _edited:false, sourceType:"dienstplan"};
+      setScheds([...scheds, newEvt]);
+      toast("✓ Termin hinzugefügt");
+    }
+    setEditEvt(null);
+  };
+
+  const removeEvent = (id) => {
+    deleteEvent(id);
+    toast("Termin gelöscht");
+    setEditEvt(null);
+  };
+
+  // ── PDF 출력 ──────────────────────────────────────────────
+  const printPlan = () => {
+    const startStr = `${weekDays[0].getDate().toString().padStart(2,'0')}.${(weekDays[0].getMonth()+1).toString().padStart(2,'0')}.${weekDays[0].getFullYear()}`;
+    const endStr   = `${weekDays[6].getDate().toString().padStart(2,'0')}.${(weekDays[6].getMonth()+1).toString().padStart(2,'0')}.${weekDays[6].getFullYear()}`;
+    const dayRows = weekDayStrs.flatMap(dateStr => {
+      const evs = evtsForDay(dateStr);
+      const dt = new Date(dateStr+"T12:00:00");
+      const dayLabel = `${DE_DAYS_FULL[dt.getDay()]}, ${dt.getDate().toString().padStart(2,'0')}.${(dt.getMonth()+1).toString().padStart(2,'0')}.${dt.getFullYear()}`;
+      const result = [`<tr class="day-row"><td colspan="6">${dayLabel}</td></tr>`];
+      if (evs.length === 0) {
+        result.push(`<tr class="cf-row"><td></td><td></td><td>chorfrei</td><td></td><td></td><td></td></tr>`);
+      } else {
+        evs.forEach(e => {
+          const ti = typeInfo(e.eventType);
+          const timeStr = e.startTime && e.startTime !== "00:00"
+            ? e.endTime && e.endTime !== "00:00" ? `${e.startTime} – ${e.endTime} Uhr` : `${e.startTime} Uhr`
+            : "";
+          const note = [e.note, e.conductor ? `Ltg: ${e.conductor}` : ""].filter(Boolean).join(" · ");
+          result.push(`<tr>
+            <td><span class="badge" style="background:${ti.bg};color:${ti.color}">${ti.short}</span></td>
+            <td style="font-weight:600">${e.title||e.production||""}</td>
+            <td>${timeStr}</td>
+            <td>${e.location||""}</td>
+            <td>${e.targetGroup||""}</td>
+            <td style="color:#888;font-size:10px">${note}</td>
+          </tr>`);
+        });
+      }
+      return result;
+    });
+    const rows = dayRows;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Dienstplan ${startStr} – ${endStr}</title>
+    <style>
+      @page{size:A4;margin:15mm 12mm}
+      body{font-family:'Arial',sans-serif;font-size:11px;margin:0;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1a1a2e;padding-bottom:8px;margin-bottom:14px}
+      .header-left h1{font-size:14px;font-weight:700;margin:0 0 2px;color:#1a1a2e}
+      .header-left .sub{font-size:10px;color:#555}
+      .header-right{font-size:10px;color:#888;text-align:right}
+      table{width:100%;border-collapse:collapse;margin-top:0}
+      thead tr{background:#1a1a2e}
+      th{color:#fff;padding:5px 7px;text-align:left;font-size:10px;font-weight:600;letter-spacing:0.03em}
+      td{padding:5px 7px;border-bottom:1px solid #e8e8e8;vertical-align:middle;font-size:10.5px}
+      .day-row td{background:#f5f5f7;font-weight:700;color:#1a1a2e;font-size:11px;border-top:2px solid #ccc;padding:5px 7px}
+      .cf-row td{color:#aaa;font-style:italic}
+      .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9.5px;font-weight:800;letter-spacing:0.03em}
+      .footer{margin-top:16px;font-size:9px;color:#bbb;border-top:1px solid #eee;padding-top:6px;display:flex;justify-content:space-between}
+      @media print{body{margin:0}}
+    </style></head><body>
+    <div class="header">
+      <div class="header-left">
+        <h1>Sächsische Staatsoper Dresden — Staatsopernchor</h1>
+        <div class="sub">Dienstplan &nbsp;${startStr} – ${endStr}</div>
+      </div>
+      <div class="header-right">Stand: ${standDate}</div>
+    </div>
+    <table>
+      <thead><tr><th>Typ</th><th>Titel / Produktion</th><th>Zeit</th><th>Ort</th><th>Gruppe</th><th>Hinweis</th></tr></thead>
+      <tbody>${rows.join("")}</tbody>
+    </table>
+    <div class="footer"><span>Änderungen sind jederzeit möglich und ausdrücklich vorbehalten.</span><span>© Staatsopernchor Dresden</span></div>
+    <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
+    </body></html>`;
+    const w = window.open("","_blank","width=900,height=700");
+    w.document.write(html);
+    w.document.close();
+  };
+
+  // ── mailto 이메일 ─────────────────────────────────────────
+  const sendEmail = () => {
+    const startStr = `${weekDays[0].getDate().toString().padStart(2,'0')}.${(weekDays[0].getMonth()+1).toString().padStart(2,'0')}.${weekDays[0].getFullYear()}`;
+    const endStr   = `${weekDays[6].getDate().toString().padStart(2,'0')}.${(weekDays[6].getMonth()+1).toString().padStart(2,'0')}.${weekDays[6].getFullYear()}`;
+    const lines = ["Staatsopernchor Dresden — Dienstplan", `${startStr} – ${endStr} | Stand: ${standDate}`, ""];
+    weekDayStrs.forEach(dateStr => {
+      const dt = new Date(dateStr+"T12:00:00");
+      const evs = evtsForDay(dateStr);
+      lines.push(`${DE_DAYS_FULL[dt.getDay()]}, ${dt.getDate().toString().padStart(2,'0')}.${(dt.getMonth()+1).toString().padStart(2,'0')}:`);
+      if (evs.length === 0) { lines.push("  chorfrei"); }
+      else evs.forEach(e => {
+        const ti = typeInfo(e.eventType);
+        const time = e.startTime && e.startTime !== "00:00" ? e.startTime : "";
+        const end  = e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : "";
+        lines.push(`  ${ti.short}  ${time}${end}  ${e.title||e.production||""}  ${e.location?"("+e.location+")":""}  ${e.targetGroup||""}`);
+      });
+      lines.push("");
+    });
+    const body = lines.join("\n");
+    window.location.href = `mailto:?subject=${encodeURIComponent(`Dienstplan ${startStr}–${endStr}`)}&body=${encodeURIComponent(body)}`;
+  };
+
+  // ── 이벤트 편집 모달 ──────────────────────────────────────
+  const EventEditModal = ({ initial, onSave, onClose, onDelete }) => {
+    const isNew = !initial?.id;
+    const [form, setForm] = useState({
+      date:        initial?.date || (editEvt?.toString?.().startsWith?.("new:") ? editEvt.slice(4) : ""),
+      startTime:   initial?.startTime || "",
+      endTime:     initial?.endTime || "",
+      eventType:   initial?.eventType || "Musikalische Probe",
+      title:       initial?.title || "",
+      production:  initial?.production || "",
+      location:    initial?.location || "",
+      targetGroup: initial?.targetGroup || "",
+      conductor:   initial?.conductor || "",
+      note:        initial?.note || "",
+      ...( initial?.id ? {id: initial.id} : {} )
+    });
+    const set = (k,v) => setForm(f => ({...f,[k]:v}));
+    const ti = typeInfo(form.eventType);
+    const uniqueProds = [...new Set(scheds.map(e=>e.production).filter(Boolean))].sort();
+    const commonLocations = ["Bühne","Chorsaal","Probebühne 1","Probebühne 2","Orchesterprobesaal","Semperoper"];
+    const commonGroups = ["Alle Eingeteilten","Alle Herren","Alle Damen","Sopran","Alt","Tenor","Bass","Alle","nach Ansage"];
+
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:2000, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+        onClick={e => e.target === e.currentTarget && onClose()}>
+        <div style={{ background:"var(--bg)", borderRadius:"18px 18px 0 0", width:"100%", maxWidth:600, maxHeight:"92vh",
+          overflowY:"auto", padding:"20px 20px 40px" }}>
+          {/* 헤더 */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+            <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600 }}>
+              {isNew ? "Termin hinzufügen" : "Termin bearbeiten"}
+            </div>
+            <button onClick={onClose} style={{ background:"none", border:"none", fontSize:"1.2rem", cursor:"pointer", color:"var(--muted)" }}>✕</button>
+          </div>
+
+          {/* 이벤트 타입 선택 */}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Typ</div>
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+              {EVENT_TYPES.filter(t=>t.key!=="Sonstiges").map(t => (
+                <button key={t.key} onClick={()=>set("eventType",t.key)}
+                  style={{ padding:"5px 10px", borderRadius:7, border:`1px solid ${form.eventType===t.key?t.color:"var(--border)"}`,
+                    background: form.eventType===t.key ? t.bg : "var(--s2)",
+                    color: form.eventType===t.key ? t.color : "var(--text2)",
+                    fontSize:"0.76rem", fontWeight:form.eventType===t.key?700:400,
+                    fontFamily:"var(--sans)", cursor:"pointer" }}>
+                  {t.short}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 날짜 / 시간 */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
+            {[["date","Datum","date"],["startTime","Beginn","time"],["endTime","Ende","time"]].map(([k,l,type])=>(
+              <div key={k}>
+                <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>{l}</div>
+                <input type={type} value={form[k]} onChange={e=>set(k,e.target.value)}
+                  style={{ width:"100%", padding:"7px 8px", background:"var(--s2)", border:"1px solid var(--border)",
+                    borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+              </div>
+            ))}
+          </div>
+
+          {/* 제목 */}
+          <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Titel</div>
+            <input value={form.title} onChange={e=>set("title",e.target.value)} placeholder="z.B. Parsifal Bühnenprobe"
+              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
+                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+          </div>
+
+          {/* 작품 */}
+          <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Produktion</div>
+            <input value={form.production} onChange={e=>set("production",e.target.value)}
+              list="prod-list" placeholder="Produktion wählen…"
+              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
+                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+            <datalist id="prod-list">{uniqueProds.map(p=><option key={p} value={p}/>)}</datalist>
+          </div>
+
+          {/* 장소 / 대상 */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+            <div>
+              <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Ort</div>
+              <input value={form.location} onChange={e=>set("location",e.target.value)}
+                list="loc-list" placeholder="Ort…"
+                style={{ width:"100%", padding:"7px 8px", background:"var(--s2)", border:"1px solid var(--border)",
+                  borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+              <datalist id="loc-list">{commonLocations.map(l=><option key={l} value={l}/>)}</datalist>
+            </div>
+            <div>
+              <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Gruppe</div>
+              <input value={form.targetGroup} onChange={e=>set("targetGroup",e.target.value)}
+                list="grp-list" placeholder="Gruppe…"
+                style={{ width:"100%", padding:"7px 8px", background:"var(--s2)", border:"1px solid var(--border)",
+                  borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+              <datalist id="grp-list">{commonGroups.map(g=><option key={g} value={g}/>)}</datalist>
+            </div>
+          </div>
+
+          {/* 지휘자 / 비고 */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:18 }}>
+            {[["conductor","Dirigent"],["note","Hinweis"]].map(([k,l])=>(
+              <div key={k}>
+                <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>{l}</div>
+                <input value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={l+"…"}
+                  style={{ width:"100%", padding:"7px 8px", background:"var(--s2)", border:"1px solid var(--border)",
+                    borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
+              </div>
+            ))}
+          </div>
+
+          {/* 저장 / 삭제 */}
+          <div style={{ display:"flex", gap:8 }}>
+            {!isNew && <button onClick={()=>onDelete(initial.id)}
+              style={{ padding:"10px 16px", borderRadius:10, border:"1px solid var(--border)",
+                background:"none", color:"#E8173A", fontFamily:"var(--sans)", fontSize:"0.84rem", cursor:"pointer" }}>
+              Löschen
+            </button>}
+            <button onClick={onClose}
+              style={{ padding:"10px 16px", borderRadius:10, border:"1px solid var(--border)",
+                background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.84rem", cursor:"pointer" }}>
+              Abbrechen
+            </button>
+            <button onClick={()=>onSave(form)} disabled={!form.date || !form.eventType}
+              style={{ flex:1, padding:"10px", borderRadius:10, border:"none",
+                background:ti.color, color:"#fff", fontFamily:"var(--sans)",
+                fontSize:"0.9rem", fontWeight:700, cursor:"pointer", letterSpacing:"-0.01em" }}>
+              {isNew ? "Hinzufügen" : "Speichern"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── 주간 달력 뷰 ──────────────────────────────────────────
+  return (
+    <div style={{ paddingBottom:60 }}>
+      {/* 헤더 */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+        <div style={{ fontFamily:"var(--serif)", fontSize:"1.05rem", fontWeight:600, color:"var(--text)", flex:1 }}>
+          Dienstplan erstellen
+        </div>
+        <button onClick={()=>setWeekStart(getMonday(today))}
+          style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
+            background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.78rem", cursor:"pointer" }}>
+          Heute
+        </button>
+        <button onClick={() => {
+          const prevWeekStrs = Array.from({length:7}, (_,i) => fmtDate(addDays(weekStart,-7+i)));
+          const prevEvts = scheds.filter(e => prevWeekStrs.includes(e.date));
+          if (prevEvts.length === 0) { toast("Letzte Woche hat keine Termine."); return; }
+          const copied = prevEvts.map(e => ({
+            ...e,
+            id: "dp"+Date.now()+Math.random().toString(36).slice(2,6),
+            date: fmtDate(addDays(new Date(e.date+"T12:00:00"), 7)),
+            updatedAt: Date.now(), _edited: false, sourceType:"dienstplan"
+          }));
+          setScheds([...scheds, ...copied]);
+          toast(`✓ ${copied.length} Termine aus Vorwoche kopiert`);
+        }}
+          style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
+            background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.78rem", cursor:"pointer" }}>
+          ↻ Vorwoche
+        </button>
+        <button onClick={()=>setWeekStart(addDays(weekStart,-7))}
+          style={{ padding:"5px 10px", borderRadius:8, border:"1px solid var(--border)",
+            background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.9rem", cursor:"pointer" }}>‹</button>
+        <div style={{ fontSize:"0.84rem", fontWeight:600, color:"var(--text)", minWidth:140, textAlign:"center" }}>
+          {`${weekDays[0].getDate()}. ${DE_MONTHS[weekDays[0].getMonth()]} – ${weekDays[6].getDate()}. ${DE_MONTHS[weekDays[6].getMonth()]} ${weekDays[6].getFullYear()}`}
+        </div>
+        <button onClick={()=>setWeekStart(addDays(weekStart,7))}
+          style={{ padding:"5px 10px", borderRadius:8, border:"1px solid var(--border)",
+            background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.9rem", cursor:"pointer" }}>›</button>
+      </div>
+
+      {/* Stand-Datum + 액션 버튼 */}
+      <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flex:1 }}>
+          <span style={{ fontSize:"0.75rem", color:"var(--muted)", whiteSpace:"nowrap" }}>Stand:</span>
+          <input value={standDate} onChange={e=>setStandDate(e.target.value)}
+            style={{ width:100, padding:"5px 8px", background:"var(--s2)", border:"1px solid var(--border)",
+              borderRadius:7, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.8rem" }}/>
+        </div>
+        <button onClick={printPlan}
+          style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:9,
+            border:"1px solid var(--border)", background:"var(--s2)", color:"var(--text)",
+            fontFamily:"var(--sans)", fontSize:"0.8rem", cursor:"pointer", fontWeight:500 }}>
+          🖨 PDF
+        </button>
+        <button onClick={sendEmail}
+          style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:9,
+            border:"1px solid #2E7BDB", background:"rgba(46,123,219,0.1)", color:"#2E7BDB",
+            fontFamily:"var(--sans)", fontSize:"0.8rem", cursor:"pointer", fontWeight:600 }}>
+          ✉ E-Mail
+        </button>
+      </div>
+
+      {/* 주간 일정 */}
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        {weekDayStrs.map(dateStr => {
+          const dt = new Date(dateStr+"T12:00:00");
+          const isToday = dateStr === fmtDate(today);
+          const isSunday = dt.getDay() === 0;
+          const evs = evtsForDay(dateStr);
+
+          return (
+            <div key={dateStr}
+              style={{ background:"var(--s1)", border:`1px solid ${isToday?"var(--accent)":"var(--border)"}`,
+                borderRadius:12, overflow:"hidden",
+                opacity: isSunday ? 0.65 : 1 }}>
+              {/* 날짜 헤더 */}
+              <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px",
+                background: isToday ? "var(--accent-dim)" : "var(--s2)",
+                borderBottom: evs.length > 0 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ fontWeight:700, fontSize:"0.88rem",
+                  color: isToday ? "var(--accent)" : "var(--text)" }}>
+                  {DE_DAYS[dt.getDay()]}
+                </div>
+                <div style={{ fontSize:"0.84rem", color:"var(--text2)" }}>
+                  {dt.getDate().toString().padStart(2,'0')}.{(dt.getMonth()+1).toString().padStart(2,'0')}.
+                </div>
+                {evs.length === 0 && (
+                  <div style={{ fontSize:"0.74rem", color:"var(--faint)", fontStyle:"italic" }}>chorfrei</div>
+                )}
+                <div style={{ marginLeft:"auto", display:"flex", gap:4 }}>
+                  <button onClick={()=>setEditEvt(`new:${dateStr}`)}
+                    style={{ padding:"3px 10px", borderRadius:7, border:"1px solid var(--border)",
+                      background:"var(--s1)", color:"var(--accent)", fontFamily:"var(--sans)",
+                      fontSize:"0.76rem", fontWeight:700, cursor:"pointer" }}>
+                    + Termin
+                  </button>
+                </div>
+              </div>
+
+              {/* 이벤트 목록 */}
+              {evs.map(e => {
+                const ti = typeInfo(e.eventType);
+                const timeStr = e.startTime && e.startTime !== "00:00"
+                  ? e.endTime && e.endTime !== "00:00" ? `${e.startTime}–${e.endTime}` : e.startTime
+                  : "";
+                return (
+                  <div key={e.id} onClick={()=>setEditEvt(e)}
+                    style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"9px 12px",
+                      borderBottom:"1px solid var(--border)", cursor:"pointer",
+                      transition:"background 0.1s" }}
+                    onMouseEnter={el=>el.currentTarget.style.background="var(--s2)"}
+                    onMouseLeave={el=>el.currentTarget.style.background="transparent"}>
+                    <span style={{ background:ti.bg, color:ti.color, padding:"2px 7px",
+                      borderRadius:5, fontSize:"0.7rem", fontWeight:800,
+                      flexShrink:0, marginTop:1 }}>{ti.short}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:"0.85rem", fontWeight:600, color:"var(--text)",
+                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                        {e.title || e.production || e.eventType}
+                      </div>
+                      <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:1 }}>
+                        {[timeStr, e.location, e.targetGroup].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    <span style={{ fontSize:"0.7rem", color:"var(--faint)", flexShrink:0 }}>✎</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 이벤트 편집 모달 */}
+      {editEvt && (
+        <EventEditModal
+          initial={typeof editEvt === "string" ? { date: editEvt.startsWith("new:") ? editEvt.slice(4) : "" } : editEvt}
+          onSave={saveEvent}
+          onClose={()=>setEditEvt(null)}
+          onDelete={removeEvent}
+        />
+      )}
+    </div>
+  );
+}
+
 function BesetzungsStatistik({ scheds, users, allSettings }) {
   const [view, setView]           = useState("summary");
   const [selSeason, setSelSeason] = useState("all");
@@ -3149,7 +3600,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
   return (
     <div className="page">
       <div className="atabs">
-        {[["scheds","Spielplan"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
+        {[["scheds","Spielplan"], ["planer","✏️ Dienstplan"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
           <button key={v} className={`atab${atab === v ? " on" : ""}`} onClick={() => setAtab(v)}>{l}</button>
         ))}
       </div>
@@ -3162,6 +3613,10 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
           setEditModal={setEditModal}
           toast={toast}
         />
+      )}
+
+      {atab === "planer" && (
+        <DienstplanEditor scheds={scheds} setScheds={setScheds} deleteEvent={deleteEvent} toast={toast} />
       )}
 
       {atab === "import" && (
