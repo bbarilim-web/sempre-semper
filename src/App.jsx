@@ -759,8 +759,7 @@ body {
 .src-dienstplan { background: rgba(50,215,75,0.15); color: #32D74B; }
 .src-monatsplan { background: rgba(59,158,255,0.15); color: #3B9EFF; }
 .src-vorplanung { background: rgba(255,159,10,0.15); color: #FF9F0A; }
-.src-anprobe    { background: rgba(232,146,10,0.15);  color: #E8920A; }
-.src-schminken  { background: rgba(232,23,58,0.12);    color: #E8173A; }
+
 .src-tagesplan  { background: rgba(255,69,58,0.15);  color: #FF453A; }
 
 /* ── Admin ── */
@@ -905,8 +904,7 @@ export default function App() {
     pinnwand, savePinnwand, deletePost: fbDeletePost,
     settings, saveSettings,
     allUsers, allSettings,
-    anproben, saveAnprobe, deleteAnprobe,
-    schminkenplaene, saveSchminkenplan, deleteSchminkenplan,
+
   } = useFirebase();
 
   const user = profile;
@@ -1057,11 +1055,11 @@ export default function App() {
         </header>
 
         <main style={{ flex: 1 }}>
-          {tab === "calendar"  && <CalView scheds={scheds} user={user} defaultView={settings.defaultView} settings={settings} schminkenplaene={schminkenplaene} />}
+          {tab === "calendar"  && <CalView scheds={scheds} user={user} defaultView={settings.defaultView} settings={settings} />}
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
           {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} anproben={anproben} saveAnprobe={saveAnprobe} deleteAnprobe={deleteAnprobe} schminkenplaene={schminkenplaene} saveSchminkenplan={saveSchminkenplan} deleteSchminkenplan={deleteSchminkenplan} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} />}
         </main>
 
         <nav className="bottomnav">
@@ -1375,7 +1373,7 @@ function EvCard({ e, user, compact = false, changed = false }) {
       <div className="ecard-meta">
         {e.location && <span>📍 {e.location}</span>}
         <span className={`source-tag src-${e.sourceType || "dienstplan"}`}>
-          {e.sourceType === "monatsplan" ? "Monatsplan" : e.sourceType === "vorplanung" ? "Vorplanung" : e.sourceType === "tagesplan" ? "Tagesplan" : e.sourceType === "anprobe" ? "Anprobe" : e.sourceType === "schminken" ? "Schminkenplan" : "Dienstplan"}
+          {e.sourceType === "monatsplan" ? "Monatsplan" : e.sourceType === "vorplanung" ? "Vorplanung" : e.sourceType === "tagesplan" ? "Tagesplan" : e.sourceType === "anprobe" ? "Anprobe" : "Dienstplan"}
         </span>
         {user?.voice === "Bass" && (
           <span className={`req-pill ${req === true ? "req-yes" : req === false ? "req-no" : "req-unk"}`}>
@@ -1395,7 +1393,7 @@ function EvCard({ e, user, compact = false, changed = false }) {
 // ═══════════════════════════════════════════════════════════════════════
 //  CALENDAR VIEW  — 4 modes: Tag / Woche / Monat / Saison
 // ═══════════════════════════════════════════════════════════════════════
-function CalView({ scheds, user, defaultView = "woche", settings, schminkenplaene = [] }) {
+function CalView({ scheds, user, defaultView = "woche", settings }) {
   const now = new Date();
   const [viewMode, setViewMode] = useState(defaultView);
   const [selDate, setSelDate]   = useState(todayStr);
@@ -1406,48 +1404,9 @@ function CalView({ scheds, user, defaultView = "woche", settings, schminkenplaen
 
   // helpers
   const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
-  // 내 Anprobe — 날짜별 조회
-  const myAnproben = (anproben || []).filter(a => {
-    if (!uid) return false;
-    return a.uid === uid;
-  });
-  const anprobenByDate = (dateStr) => myAnproben.filter(a => a.date === dateStr);
 
   const evsByDate = d => {
-    const apEvs = anprobenByDate(d).map(a => ({
-      id:          "ap_" + a.id,
-      date:        a.date,
-      startTime:   a.startTime || "00:00",
-      endTime:     a.endTime   || "00:00",
-      eventType:   "Anprobe",
-      title:       `Anprobe: ${a.production||""}`,
-      production:  a.production || "",
-      location:    a.room       || "",
-      targetGroup: "",
-      conductor:   "",
-      note:        a.note || "",
-      sourceType:  "anprobe",
-      _isAnprobe:  true,
-    }));
-    // 당일 Schminkenplan (전체 공지 — 단원 구분 없이 표시)
-    const spEvs = (schminkenplaene||[])
-      .filter(sp => sp.vsDate === d)
-      .flatMap(sp => (sp.entries||[]).map(e => ({
-        id:          "sp_" + sp.id + "_" + e.rowId,
-        date:        d,
-        startTime:   e.startTime || "00:00",
-        endTime:     "00:00",
-        eventType:   "Schminken",
-        title:       `💄 Schminken: ${e.group||""}${e.artist?" ("+e.artist+")":""}`,
-        production:  sp.production || "",
-        location:    "",
-        targetGroup: e.group || "",
-        conductor:   e.artist || "",
-        note:        e.note || "",
-        sourceType:  "schminken",
-        _isSchminken: true,
-      })));
-    const dayEvs = [...scheds.filter(e => e.date === d), ...apEvs, ...spEvs];
+    const dayEvs = [...scheds.filter(e => e.date === d)];
     const knownProds = [...new Set(scheds.map(e => e.production).filter(Boolean))];
     const sortedKnown = [...knownProds].sort((a,b) => b.length - a.length);
     // 중복 제거: production 정규화 후 같은 시간+작품은 더 상세한 소스 우선
@@ -3426,519 +3385,6 @@ function DienstplanEditor({ scheds, setScheds, deleteEvent, toast }) {
 // ═══════════════════════════════════════════════════════════════════════
 //  ANPROBE EDITOR  — 단원별 개별 의상 피팅 일정 관리
 // ═══════════════════════════════════════════════════════════════════════
-function AnprobeEditor({ users, anproben, saveAnprobe, deleteAnprobe, scheds, toast }) {
-  const [editEntry, setEditEntry] = useState(null);
-  const [filterProd, setFilterProd] = useState("all");
-  const [search, setSearch] = useState("");
-
-  const allProdOptions = [...new Set([
-    ...anproben.map(a => a.production),
-    ...scheds.map(e => e.production),
-  ].filter(Boolean))].sort();
-
-  const fmtD = (s) => { if (!s) return ""; const [y,m,d]=s.split("-"); return `${d}.${m}.${y}`; };
-
-  const filtered = [...anproben]
-    .filter(a =>
-      (filterProd === "all" || a.production === filterProd) &&
-      (!search || (a.userName||"").toLowerCase().includes(search.toLowerCase()) ||
-                  (a.production||"").toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a,b) =>
-      (a.date||"").localeCompare(b.date||"") ||
-      (a.startTime||"").localeCompare(b.startTime||"") ||
-      (a.userName||"").localeCompare(b.userName||"")
-    );
-
-  // ── 입력 모달 ─────────────────────────────────────────────
-  const EntryModal = ({ initial, onSave, onClose, onDelete }) => {
-    const isNew = !initial?.id;
-    const [form, setForm] = useState({
-      uid:        initial?.uid        || "",
-      userName:   initial?.userName   || "",
-      production: initial?.production || "",
-      date:       initial?.date       || "",
-      startTime:  initial?.startTime  || "",
-      endTime:    initial?.endTime    || "",
-      room:       initial?.room       || "",
-      note:       initial?.note       || "",
-      ...(initial?.id ? { id: initial.id } : {}),
-    });
-    const set = (k,v) => setForm(f => ({...f,[k]:v}));
-
-    const ROOMS = ["Kostümabteilung 1","Kostümabteilung 2","Ankleidezimmer A","Ankleidezimmer B","Probebühne 1"];
-
-    return (
-      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:2000,
-        display:"flex", alignItems:"flex-end", justifyContent:"center" }}
-        onClick={e => e.target===e.currentTarget && onClose()}>
-        <div style={{ background:"var(--bg)", borderRadius:"18px 18px 0 0", width:"100%",
-          maxWidth:520, maxHeight:"90vh", overflowY:"auto", padding:"20px 20px 40px" }}>
-
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-            <div style={{ fontFamily:"var(--serif)", fontSize:"1rem", fontWeight:600 }}>
-              {isNew ? "Anprobe hinzufügen" : "Anprobe bearbeiten"}
-            </div>
-            <button onClick={onClose} style={{ background:"none",border:"none",fontSize:"1.2rem",cursor:"pointer",color:"var(--muted)" }}>✕</button>
-          </div>
-
-          {/* 단원 선택 — 이름 알파벳순, 성부 구분 없음 */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Mitglied</div>
-            <select value={form.uid}
-              onChange={e => {
-                const u = users.find(u => u.id === e.target.value);
-                if (u) setForm(f => ({...f,
-                  uid: u.id,
-                  userName: (u.name||u.email||"").split(" · ")[0],
-                }));
-              }}
-              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem" }}>
-              <option value="">— Mitglied wählen —</option>
-              {[...users].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(u =>
-                <option key={u.id} value={u.id}>
-                  {(u.name||u.email||"").split(" · ")[0]}
-                </option>
-              )}
-            </select>
-          </div>
-
-          {/* 작품 */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Produktion</div>
-            <input value={form.production} onChange={e=>set("production",e.target.value)}
-              list="ap-prod-list" placeholder="Produktion…"
-              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-            <datalist id="ap-prod-list">{allProdOptions.map(p=><option key={p} value={p}/>)}</datalist>
-          </div>
-
-          {/* 날짜 / 시작 / 종료 / 장소 */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-            {[["date","Datum","date"],["startTime","Beginn","time"],["endTime","Ende","time"],["room","Raum","text"]].map(([k,l,t]) => (
-              <div key={k}>
-                <div style={{ fontSize:"0.68rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>{l}</div>
-                <input type={t} value={form[k]} onChange={e=>set(k,e.target.value)}
-                  list={k==="room"?"ap-room-list":undefined}
-                  style={{ width:"100%", padding:"6px 7px", background:"var(--s2)", border:"1px solid var(--border)",
-                    borderRadius:7, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.8rem", boxSizing:"border-box" }}/>
-              </div>
-            ))}
-          </div>
-          <datalist id="ap-room-list">{ROOMS.map(r=><option key={r} value={r}/>)}</datalist>
-
-          {/* 비고 */}
-          <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Hinweis</div>
-            <input value={form.note} onChange={e=>set("note",e.target.value)} placeholder="z.B. Kostüm mitbringen…"
-              style={{ width:"100%", padding:"7px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-          </div>
-
-          <div style={{ display:"flex", gap:8 }}>
-            {!isNew && <button onClick={()=>onDelete(initial.id)}
-              style={{ padding:"10px 16px", borderRadius:10, border:"1px solid var(--border)",
-                background:"none", color:"#E8173A", fontFamily:"var(--sans)", fontSize:"0.84rem", cursor:"pointer" }}>Löschen</button>}
-            <button onClick={onClose}
-              style={{ padding:"10px 14px", borderRadius:10, border:"1px solid var(--border)",
-                background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.84rem", cursor:"pointer" }}>Abbrechen</button>
-            <button onClick={()=>onSave(form)} disabled={!form.uid||!form.date}
-              style={{ flex:1, padding:"10px", borderRadius:10, border:"none",
-                background:"#E8920A", color:"#fff", fontFamily:"var(--sans)",
-                fontSize:"0.9rem", fontWeight:700, cursor:"pointer" }}>
-              {isNew ? "Hinzufügen" : "Speichern"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div style={{ paddingBottom:60 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ fontFamily:"var(--serif)", fontSize:"1.05rem", fontWeight:600, color:"var(--text)", flex:1 }}>Anproben</div>
-        <button onClick={()=>setEditEntry("new")}
-          style={{ padding:"7px 14px", borderRadius:9, border:"none",
-            background:"#E8920A", color:"#fff", fontFamily:"var(--sans)",
-            fontSize:"0.82rem", fontWeight:700, cursor:"pointer" }}>+ Anprobe</button>
-      </div>
-
-      {/* 필터: 이름 검색 + 작품 필터 */}
-      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name suchen…"
-          style={{ flex:1, minWidth:120, padding:"7px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-            borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.82rem" }}/>
-        <select value={filterProd} onChange={e=>setFilterProd(e.target.value)}
-          style={{ padding:"7px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-            borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.82rem", cursor:"pointer" }}>
-          <option value="all">Alle Produktionen</option>
-          {allProdOptions.map(p=><option key={p} value={p}>{p}</option>)}
-        </select>
-      </div>
-
-      {/* 목록: 날짜순, 성부 구분 없이 단순 나열 */}
-      {filtered.length === 0
-        ? <div style={{ textAlign:"center", color:"var(--faint)", padding:40, fontStyle:"italic", fontSize:"0.88rem" }}>Keine Anproben eingetragen.</div>
-        : <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {filtered.map(a => {
-              const timeStr = a.startTime ? (a.endTime ? `${a.startTime}–${a.endTime}` : a.startTime) : "";
-              return (
-                <div key={a.id} onClick={()=>setEditEntry(a)}
-                  style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px",
-                    background:"var(--s1)", border:"1px solid var(--border)",
-                    borderLeft:"3px solid #E8920A", borderRadius:10, cursor:"pointer" }}
-                  onMouseEnter={el=>el.currentTarget.style.background="var(--s2)"}
-                  onMouseLeave={el=>el.currentTarget.style.background="var(--s1)"}>
-                  {/* 날짜/시간 */}
-                  <div style={{ flexShrink:0, textAlign:"center", minWidth:56 }}>
-                    <div style={{ fontSize:"0.88rem", fontWeight:700, color:"var(--text)" }}>{fmtD(a.date)}</div>
-                    <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:1 }}>{timeStr||"—"}</div>
-                  </div>
-                  {/* 구분선 */}
-                  <div style={{ width:1, height:32, background:"var(--border)", flexShrink:0 }}/>
-                  {/* 이름 */}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:"0.9rem", fontWeight:600, color:"var(--text)" }}>{a.userName||"—"}</div>
-                    {a.room && <div style={{ fontSize:"0.73rem", color:"var(--muted)", marginTop:1 }}>{a.room}</div>}
-                  </div>
-                  {/* 작품 뱃지 */}
-                  <div style={{ background:"rgba(232,146,10,0.12)", color:"#E8920A", borderRadius:6,
-                    padding:"3px 9px", fontSize:"0.75rem", fontWeight:700, flexShrink:0, maxWidth:130,
-                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                    {a.production||"—"}
-                  </div>
-                  <span style={{ color:"var(--faint)", fontSize:"0.8rem", flexShrink:0 }}>✎</span>
-                </div>
-              );
-            })}
-          </div>
-      }
-
-      {editEntry && (
-        <EntryModal
-          initial={editEntry === "new" ? {} : editEntry}
-          onSave={async (data) => { await saveAnprobe(data); toast("✓ Anprobe gespeichert"); setEditEntry(null); }}
-          onClose={()=>setEditEntry(null)}
-          onDelete={async (id) => { await deleteAnprobe(id); toast("Anprobe gelöscht"); setEditEntry(null); }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  SCHMINKENPLAN EDITOR  — 공연별 분장 계획 (전체 공지용)
-// ═══════════════════════════════════════════════════════════════════════
-function SchminkenplanEditor({ scheds, schminkenplaene, saveSchminkenplan, deleteSchminkenplan, toast }) {
-  const [selPlan, setSelPlan]   = useState(null);
-  const [editPlan, setEditPlan] = useState(null);
-  const [editRow, setEditRow]   = useState(null);
-
-  const vsProds = [...new Set(
-    scheds.filter(e=>e.eventType==="Vorstellung").map(e=>e.production).filter(Boolean)
-  )].sort();
-
-  const fmtD = (s) => { if (!s) return ""; const [y,m,d]=s.split("-"); return `${d}.${m}.${y}`; };
-
-  // ── PDF 출력 ──────────────────────────────────────────────
-  const printPlan = (plan) => {
-    const entries = [...(plan.entries||[])].sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""));
-    const rows = entries.map(e => `<tr>
-      <td style="font-weight:700;font-size:12px;color:#1a1a2e">${e.startTime||"—"}</td>
-      <td style="font-weight:600">${e.group||""}</td>
-      <td>${e.artist||""}</td>
-      <td style="color:#666;font-size:10px">${e.note||""}</td>
-    </tr>`);
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Schminkenplan — ${plan.production} — ${fmtD(plan.vsDate)}</title>
-    <style>
-      @page{size:A4;margin:15mm 12mm}
-      body{font-family:Arial,sans-serif;font-size:11px;margin:0;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      .header{border-bottom:3px solid #1a1a2e;padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end}
-      h1{font-size:14px;margin:0 0 3px;color:#1a1a2e}
-      .meta{font-size:10px;color:#555}
-      table{width:100%;border-collapse:collapse}
-      th{background:#1a1a2e;color:#fff;padding:6px 8px;text-align:left;font-size:10px;font-weight:600;letter-spacing:0.03em}
-      td{padding:7px 8px;border-bottom:1px solid #eee;vertical-align:middle}
-      tr:nth-child(even) td{background:#f9f9f9}
-      .footer{margin-top:16px;font-size:9px;color:#bbb;border-top:1px solid #eee;padding-top:6px;display:flex;justify-content:space-between}
-    </style></head><body>
-    <div class="header">
-      <div>
-        <h1>Schminkenplan — ${plan.production}</h1>
-        <div class="meta">Vorstellung: ${fmtD(plan.vsDate)} &nbsp;|&nbsp; Beginn: ${plan.vsTime||"—"} Uhr &nbsp;|&nbsp; ${plan.location||"Bühne"}</div>
-      </div>
-      <div class="meta">Stand: ${new Date().toLocaleDateString("de-DE")}</div>
-    </div>
-    <table>
-      <thead><tr><th>Schminken ab</th><th>Gruppe</th><th>Maskenbildner*in</th><th>Hinweis</th></tr></thead>
-      <tbody>${rows.join("")}</tbody>
-    </table>
-    <div class="footer"><span>Änderungen vorbehalten.</span><span>© Staatsopernchor Dresden</span></div>
-    <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
-    </body></html>`;
-    const w = window.open("","_blank","width=860,height=680");
-    w.document.write(html); w.document.close();
-  };
-
-  // ── 행 편집 모달 (시작시간 + 그룹 + 분장사 + 비고만) ─────
-  const RowModal = ({ initial, onSave, onClose, onDelete }) => {
-    const isNew = !initial?.rowId;
-    const [form, setForm] = useState({
-      rowId:     initial?.rowId     || "r"+Date.now(),
-      startTime: initial?.startTime || "",
-      group:     initial?.group     || "",
-      artist:    initial?.artist    || "",
-      note:      initial?.note      || "",
-    });
-    const set = (k,v) => setForm(f=>({...f,[k]:v}));
-    const GROUPS = ["Alle Eingeteilten","Alle Damen","Alle Herren",
-      "Sopran 1","Sopran 2","Alt 1","Alt 2","Tenor 1","Tenor 2","Bass 1","Bass 2"];
-
-    return (
-      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:2100,
-        display:"flex", alignItems:"flex-end", justifyContent:"center" }}
-        onClick={e=>e.target===e.currentTarget&&onClose()}>
-        <div style={{ background:"var(--bg)", borderRadius:"18px 18px 0 0", width:"100%",
-          maxWidth:460, padding:"20px 20px 40px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-            <div style={{ fontFamily:"var(--serif)", fontSize:"0.95rem", fontWeight:600 }}>
-              {isNew ? "Eintrag hinzufügen" : "Eintrag bearbeiten"}
-            </div>
-            <button onClick={onClose} style={{ background:"none",border:"none",fontSize:"1.1rem",cursor:"pointer",color:"var(--muted)" }}>✕</button>
-          </div>
-
-          {/* 시작 시간 — 가장 중요한 정보, 크게 */}
-          <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Schminken ab</div>
-            <input type="time" value={form.startTime} onChange={e=>set("startTime",e.target.value)}
-              style={{ width:"100%", padding:"10px 12px", background:"var(--s2)", border:"2px solid var(--accent)",
-                borderRadius:10, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"1.1rem",
-                fontWeight:700, boxSizing:"border-box", textAlign:"center" }}/>
-          </div>
-
-          {/* 그룹 */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Gruppe</div>
-            <input value={form.group} onChange={e=>set("group",e.target.value)}
-              list="sm-grp-list" placeholder="z.B. Alle Damen, Tenor 1 …"
-              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-            <datalist id="sm-grp-list">{GROUPS.map(g=><option key={g} value={g}/>)}</datalist>
-          </div>
-
-          {/* 분장사 */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Maskenbildner*in</div>
-            <input value={form.artist} onChange={e=>set("artist",e.target.value)}
-              placeholder="Name der Maskenbildner*in…"
-              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-          </div>
-
-          {/* 비고 */}
-          <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Hinweis</div>
-            <input value={form.note} onChange={e=>set("note",e.target.value)}
-              placeholder="z.B. Perücke, Bart, Sondermaske…"
-              style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-          </div>
-
-          <div style={{ display:"flex", gap:8 }}>
-            {!isNew && <button onClick={()=>onDelete(form.rowId)}
-              style={{ padding:"10px 14px", borderRadius:9, border:"1px solid var(--border)",
-                background:"none", color:"#E8173A", fontFamily:"var(--sans)", fontSize:"0.82rem", cursor:"pointer" }}>Löschen</button>}
-            <button onClick={onClose}
-              style={{ padding:"10px 14px", borderRadius:9, border:"1px solid var(--border)",
-                background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.82rem", cursor:"pointer" }}>Abbrechen</button>
-            <button onClick={()=>onSave(form)} disabled={!form.startTime}
-              style={{ flex:1, padding:"10px", borderRadius:9, border:"none",
-                background:"#E8173A", color:"#fff", fontFamily:"var(--sans)",
-                fontSize:"0.9rem", fontWeight:700, cursor:"pointer" }}>
-              {isNew ? "Hinzufügen" : "Speichern"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── 플랜 상세 뷰 ──────────────────────────────────────────
-  const PlanDetail = ({ plan }) => {
-    const entries = [...(plan.entries||[])].sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""));
-
-    const saveRow = (row) => {
-      const all = plan.entries||[];
-      const updated = all.some(e=>e.rowId===row.rowId)
-        ? all.map(e=>e.rowId===row.rowId?row:e)
-        : [...all, row];
-      saveSchminkenplan({...plan, entries:updated});
-      setEditRow(null); toast("✓ Eintrag gespeichert");
-    };
-    const deleteRow = (rowId) => {
-      saveSchminkenplan({...plan, entries:(plan.entries||[]).filter(e=>e.rowId!==rowId)});
-      setEditRow(null); toast("Eintrag gelöscht");
-    };
-
-    return (
-      <div>
-        {/* 헤더 */}
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-          <button onClick={()=>setSelPlan(null)}
-            style={{ background:"none", border:"none", color:"var(--accent)",
-              cursor:"pointer", fontFamily:"var(--sans)", fontSize:"0.82rem", padding:0 }}>← Zurück</button>
-          <div style={{ flex:1, fontFamily:"var(--serif)", fontSize:"0.95rem", fontWeight:600 }}>
-            {plan.production}
-          </div>
-          <button onClick={()=>printPlan(plan)}
-            style={{ padding:"5px 12px", borderRadius:8, border:"1px solid var(--border)",
-              background:"var(--s2)", color:"var(--text)", fontFamily:"var(--sans)",
-              fontSize:"0.78rem", cursor:"pointer" }}>🖨 PDF</button>
-          <button onClick={()=>setEditRow("new")}
-            style={{ padding:"5px 14px", borderRadius:8, border:"none",
-              background:"#E8173A", color:"#fff", fontFamily:"var(--sans)",
-              fontSize:"0.78rem", fontWeight:700, cursor:"pointer" }}>+ Eintrag</button>
-        </div>
-
-        {/* 공연 메타 정보 */}
-        <div style={{ background:"var(--s2)", borderRadius:10, padding:"10px 14px",
-          display:"flex", gap:16, marginBottom:16, fontSize:"0.82rem", color:"var(--muted)", flexWrap:"wrap" }}>
-          <span>📅 {fmtD(plan.vsDate)||"—"}</span>
-          <span>🎭 VS {plan.vsTime||"—"} Uhr</span>
-          <span>🗺 {plan.location||"Bühne"}</span>
-        </div>
-
-        {/* 시작시간 순 목록 */}
-        {entries.length === 0
-          ? <div style={{ textAlign:"center", color:"var(--faint)", padding:30, fontStyle:"italic" }}>Noch keine Einträge. + Eintrag klicken.</div>
-          : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {entries.map(e => (
-                <div key={e.rowId} onClick={()=>setEditRow(e)}
-                  style={{ display:"flex", alignItems:"center", gap:14, padding:"11px 14px",
-                    background:"var(--s1)", border:"1px solid var(--border)",
-                    borderRadius:10, cursor:"pointer" }}
-                  onMouseEnter={el=>el.currentTarget.style.background="var(--s2)"}
-                  onMouseLeave={el=>el.currentTarget.style.background="var(--s1)"}>
-                  {/* 시간 — 강조 */}
-                  <div style={{ fontFamily:"var(--sans)", fontSize:"1rem", fontWeight:800,
-                    color:"var(--accent)", minWidth:50, flexShrink:0 }}>
-                    {e.startTime||"—"}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:"0.88rem", fontWeight:600, color:"var(--text)" }}>
-                      {e.group||"—"}
-                    </div>
-                    {e.artist && <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginTop:1 }}>
-                      {e.artist}
-                    </div>}
-                    {e.note && <div style={{ fontSize:"0.72rem", color:"var(--faint)", fontStyle:"italic", marginTop:1 }}>
-                      {e.note}
-                    </div>}
-                  </div>
-                  <span style={{ color:"var(--faint)", fontSize:"0.8rem", flexShrink:0 }}>✎</span>
-                </div>
-              ))}
-            </div>
-        }
-
-        {editRow && (
-          <RowModal
-            initial={editRow==="new"?{}:editRow}
-            onSave={saveRow}
-            onClose={()=>setEditRow(null)}
-            onDelete={deleteRow}
-          />
-        )}
-      </div>
-    );
-  };
-
-  // ── 플랜 목록 뷰 ──────────────────────────────────────────
-  if (selPlan) return <PlanDetail plan={selPlan} />;
-
-  return (
-    <div style={{ paddingBottom:60 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
-        <div style={{ fontFamily:"var(--serif)", fontSize:"1.05rem", fontWeight:600, color:"var(--text)", flex:1 }}>Schminkenplan</div>
-        <button onClick={()=>setEditPlan({ id:"sp"+Date.now(), production:"", vsDate:"", vsTime:"", location:"Bühne", entries:[] })}
-          style={{ padding:"7px 14px", borderRadius:9, border:"none",
-            background:"#E8173A", color:"#fff", fontFamily:"var(--sans)",
-            fontSize:"0.82rem", fontWeight:700, cursor:"pointer" }}>+ Neuer Plan</button>
-      </div>
-
-      {schminkenplaene.length === 0
-        ? <div style={{ textAlign:"center", color:"var(--faint)", padding:40, fontStyle:"italic", fontSize:"0.88rem" }}>Noch keine Schminkenplaene.</div>
-        : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {[...schminkenplaene].sort((a,b)=>(b.vsDate||"").localeCompare(a.vsDate||"")).map(plan => (
-              <div key={plan.id}
-                style={{ background:"var(--s1)", border:"1px solid var(--border)",
-                  borderLeft:"3px solid #E8173A", borderRadius:10, overflow:"hidden" }}>
-                <div style={{ display:"flex", alignItems:"center", padding:"11px 14px", gap:10 }}>
-                  <div style={{ flex:1, cursor:"pointer", minWidth:0 }} onClick={()=>setSelPlan(plan)}>
-                    <div style={{ fontSize:"0.9rem", fontWeight:600, color:"var(--text)" }}>{plan.production||"—"}</div>
-                    <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:2 }}>
-                      {fmtD(plan.vsDate)||"kein Datum"} &nbsp;·&nbsp; {plan.vsTime||"—"} Uhr &nbsp;·&nbsp; {(plan.entries||[]).length} Einträge
-                    </div>
-                  </div>
-                  <button onClick={()=>printPlan(plan)}
-                    style={{ padding:"4px 10px", borderRadius:7, border:"1px solid var(--border)",
-                      background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)",
-                      fontSize:"0.74rem", cursor:"pointer", flexShrink:0 }}>🖨</button>
-                  <button onClick={()=>setSelPlan(plan)}
-                    style={{ padding:"4px 12px", borderRadius:7, border:"1px solid var(--accent)",
-                      background:"var(--accent-dim)", color:"var(--accent)", fontFamily:"var(--sans)",
-                      fontSize:"0.74rem", fontWeight:600, cursor:"pointer", flexShrink:0 }}>Öffnen ›</button>
-                </div>
-              </div>
-            ))}
-          </div>
-      }
-
-      {/* 새 플랜 생성 모달 */}
-      {editPlan && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:2000,
-          display:"flex", alignItems:"flex-end", justifyContent:"center" }}
-          onClick={e=>e.target===e.currentTarget&&setEditPlan(null)}>
-          <div style={{ background:"var(--bg)", borderRadius:"18px 18px 0 0", width:"100%",
-            maxWidth:460, padding:"20px 20px 40px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-              <div style={{ fontFamily:"var(--serif)", fontSize:"0.95rem", fontWeight:600 }}>Neuer Schminkenplan</div>
-              <button onClick={()=>setEditPlan(null)} style={{ background:"none",border:"none",fontSize:"1.1rem",cursor:"pointer",color:"var(--muted)" }}>✕</button>
-            </div>
-            {[["production","Produktion","text"],["vsDate","Datum Vorstellung","date"],["vsTime","VS Beginn","time"],["location","Spielort","text"]].map(([k,l,t])=>(
-              <div key={k} style={{ marginBottom:10 }}>
-                <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>{l}</div>
-                <input type={t} value={editPlan[k]||""} onChange={e=>setEditPlan(p=>({...p,[k]:e.target.value}))}
-                  list={k==="production"?"sp-prod-list":undefined} placeholder={l+"…"}
-                  style={{ width:"100%", padding:"8px 10px", background:"var(--s2)", border:"1px solid var(--border)",
-                    borderRadius:8, color:"var(--text)", fontFamily:"var(--sans)", fontSize:"0.84rem", boxSizing:"border-box" }}/>
-              </div>
-            ))}
-            <datalist id="sp-prod-list">{vsProds.map(p=><option key={p} value={p}/>)}</datalist>
-            <div style={{ display:"flex", gap:8, marginTop:14 }}>
-              <button onClick={()=>setEditPlan(null)}
-                style={{ padding:"10px 14px", borderRadius:9, border:"1px solid var(--border)",
-                  background:"var(--s2)", color:"var(--text2)", fontFamily:"var(--sans)", fontSize:"0.84rem", cursor:"pointer" }}>Abbrechen</button>
-              <button onClick={async()=>{
-                  await saveSchminkenplan(editPlan);
-                  toast("✓ Schminkenplan erstellt");
-                  setSelPlan(editPlan); setEditPlan(null);
-                }} disabled={!editPlan.production}
-                style={{ flex:1, padding:"10px", borderRadius:9, border:"none",
-                  background:"#E8173A", color:"#fff", fontFamily:"var(--sans)",
-                  fontSize:"0.9rem", fontWeight:700, cursor:"pointer" }}>Erstellen & öffnen</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 function BesetzungsStatistik({ scheds, users, allSettings }) {
   const [view, setView]           = useState("summary");
   const [selSeason, setSelSeason] = useState("all");
@@ -4225,7 +3671,7 @@ function BesetzungsStatistik({ scheds, users, allSettings }) {
   );
 }
 
-function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings, users, allSettings, anproben, saveAnprobe, deleteAnprobe, schminkenplaene, saveSchminkenplan, deleteSchminkenplan }) {
+function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, settings, saveSettings, users, allSettings }) {
   const [atab, setAtab] = useState("scheds");
   const [editModal, setEditModal] = useState(null);
   const [notifModal, setNotifModal] = useState(false);
@@ -4254,7 +3700,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
   return (
     <div className="page">
       <div className="atabs">
-        {[["scheds","Spielplan"], ["planer","✏️ Dienstplan"], ["anprobe","👗 Anprobe"], ["schminken","💄 Schminken"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
+        {[["scheds","Spielplan"], ["planer","✏️ Dienstplan"], ["import","PDF Import"], ["notifs","Mitteilungen"], ["statistik","📊 Besetzung"]].map(([v, l]) => (
           <button key={v} className={`atab${atab === v ? " on" : ""}`} onClick={() => setAtab(v)}>{l}</button>
         ))}
       </div>
@@ -4273,26 +3719,7 @@ function AdminView({ scheds, setScheds, deleteEvent, notifs, setNotifs, toast, s
         <DienstplanEditor scheds={scheds} setScheds={setScheds} deleteEvent={deleteEvent} toast={toast} />
       )}
 
-      {atab === "anprobe" && (
-        <AnprobeEditor
-          users={users || []}
-          anproben={anproben || []}
-          saveAnprobe={saveAnprobe}
-          deleteAnprobe={deleteAnprobe}
-          scheds={scheds}
-          toast={toast}
-        />
-      )}
 
-      {atab === "schminken" && (
-        <SchminkenplanEditor
-          scheds={scheds}
-          schminkenplaene={schminkenplaene || []}
-          saveSchminkenplan={saveSchminkenplan}
-          deleteSchminkenplan={deleteSchminkenplan}
-          toast={toast}
-        />
-      )}
 
       {atab === "import" && (
         <PdfView scheds={scheds} setScheds={setScheds} deleteEvent={deleteEvent} user={{ role: "admin" }} toast={toast} />
