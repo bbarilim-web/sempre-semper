@@ -431,7 +431,7 @@ const PROBE_RANK = { "Vorstellung":1, "Generalprobe":2, "Orchesterhauptprobe":3,
 
 const USERS = [
   { id:"u1", name:"임봉수 · Lim Bong-Su", role:"member", voice:"Bass", email:"lim.bongsu@semperoper.de",
-    ensemble:"Opernchor", theater:"Sächsische Staatsoper Dresden", part:"Bass 1." },
+    ensemble:"Opernchor", theater:"Sächsische Staatstheater Dresden Semperoper", part:"Bass 1." },
   { id:"u2", name:"Admin / Chorleitung", role:"admin", voice:"Alt", email:"admin@semperoper.de" },
 ];
 
@@ -3065,7 +3065,7 @@ function DienstplanEditor({ scheds, setScheds, deleteEvent, toast }) {
     </style></head><body>
     <div class="header">
       <div class="header-left">
-        <h1>Sächsische Staatsoper Dresden — Staatsopernchor</h1>
+        <h1>Sächsische Staatstheater Dresden Semperoper — Staatsopernchor</h1>
         <div class="sub">Dienstplan &nbsp;${startStr} – ${endStr}</div>
       </div>
       <div class="header-right">Stand: ${standDate}</div>
@@ -5096,7 +5096,7 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
             {" · Staatsopernchor"}
           </div>
           <div style={{ fontSize:"0.68rem", color:"var(--faint)", marginTop:4 }}>
-            Sächsische Staatsoper Dresden
+            Sächsische Staatstheater Dresden Semperoper
           </div>
         </div>
       </div>
@@ -5165,7 +5165,7 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
             Digitaler Spielplan des Staatsopernchors · Version 1.0 Prototype
           </div>
           <div style={{ color:"var(--faint)", fontSize:"0.72rem", marginTop:6 }}>
-            Sächsische Staatsoper Dresden · Opernchor
+            Sächsische Staatstheater Dresden Semperoper · Opernchor
           </div>
         </div>
       </div>
