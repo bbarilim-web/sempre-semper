@@ -2978,26 +2978,56 @@ function DienstplanEditor({ scheds, setScheds, deleteEvent, toast }) {
     w.document.close();
   };
 
-  // ── mailto 이메일 ─────────────────────────────────────────
-  const sendEmail = () => {
+  // ── 이메일 본문 생성 (공통 — mailto & 직접발송 모두 사용) ───────────
+  const buildEmailContent = () => {
     const startStr = `${weekDays[0].getDate().toString().padStart(2,'0')}.${(weekDays[0].getMonth()+1).toString().padStart(2,'0')}.${weekDays[0].getFullYear()}`;
     const endStr   = `${weekDays[6].getDate().toString().padStart(2,'0')}.${(weekDays[6].getMonth()+1).toString().padStart(2,'0')}.${weekDays[6].getFullYear()}`;
-    const lines = ["Staatsopernchor Dresden — Dienstplan", `${startStr} – ${endStr} | Stand: ${standDate}`, ""];
+    const subject  = `Dienstplan ${startStr}–${endStr}`;
+    const lines = [
+      "Liebe Kolleginnen und Kollegen,",
+      "",
+      `anbei der Dienstplan für die Woche ${startStr} – ${endStr} (Stand: ${standDate}).`,
+      "",
+    ];
     weekDayStrs.forEach(dateStr => {
-      const dt = new Date(dateStr+"T12:00:00");
+      const dt  = new Date(dateStr+"T12:00:00");
       const evs = evtsForDay(dateStr);
-      lines.push(`${DE_DAYS_FULL[dt.getDay()]}, ${dt.getDate().toString().padStart(2,'0')}.${(dt.getMonth()+1).toString().padStart(2,'0')}:`);
-      if (evs.length === 0) { lines.push("  chorfrei"); }
-      else evs.forEach(e => {
-        const ti = typeInfo(e.eventType);
-        const time = e.startTime && e.startTime !== "00:00" ? e.startTime : "";
-        const end  = e.endTime && e.endTime !== "00:00" ? `–${e.endTime}` : "";
-        lines.push(`  ${ti.short}  ${time}${end}  ${e.title||e.production||""}  ${e.location?"("+e.location+")":""}  ${e.targetGroup||""}`);
-      });
+      lines.push(`${DE_DAYS_FULL[dt.getDay()]}, ${dt.getDate().toString().padStart(2,'0')}.${(dt.getMonth()+1).toString().padStart(2,'0')}.:`);
+      if (evs.length === 0) {
+        lines.push("  — chorfrei");
+      } else {
+        evs.forEach(e => {
+          const ti   = typeInfo(e.eventType);
+          const time = e.startTime && e.startTime !== "00:00" ? e.startTime : "";
+          const end  = e.endTime   && e.endTime   !== "00:00" ? `–${e.endTime} Uhr` : (time ? " Uhr" : "");
+          const note = e.note ? ` (${e.note})` : "";
+          lines.push(`  ${ti.short.padEnd(4)}${time}${end}  ${e.title||e.production||""}${e.location ? "  "+e.location : ""}${e.targetGroup ? "  ["+e.targetGroup+"]" : ""}${note}`);
+        });
+      }
       lines.push("");
     });
-    const body = lines.join("\n");
-    window.location.href = `mailto:?subject=${encodeURIComponent(`Dienstplan ${startStr}–${endStr}`)}&body=${encodeURIComponent(body)}`;
+    lines.push("Mit freundlichen Grüßen");
+    lines.push("Chorbüro der Sächsischen Staatsoper Dresden");
+    lines.push("");
+    lines.push("──────────────────────────────────────────────");
+    lines.push("Änderungen sind jederzeit möglich und ausdrücklich vorbehalten.");
+    return { subject, body: lines.join("\n") };
+  };
+
+  // ── 방법 1 (현재): mailto — 기본 메일 앱 열기 ─────────────────────
+  // TODO: 방법 2 (추후): Firebase/SendGrid로 앱 내 직접 발송
+  //   const sendEmailDirect = async (recipients, subject, body) => {
+  //     await fetch("/api/send-email", { method:"POST",
+  //       headers:{"Content-Type":"application/json"},
+  //       body: JSON.stringify({ to: recipients, subject, body })
+  //     });
+  //   };
+  const sendEmail = () => {
+    const { subject, body } = buildEmailContent();
+    // mailto: 링크 — Gmail / Outlook / Thunderbird 등 기본 메일 앱이 열림
+    // body가 너무 길면 일부 메일 클라이언트에서 잘릴 수 있음 (브라우저 URL 길이 제한)
+    const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, "_self");
   };
 
   // ── 이벤트 편집 모달 ──────────────────────────────────────
@@ -3193,11 +3223,14 @@ function DienstplanEditor({ scheds, setScheds, deleteEvent, toast }) {
             fontFamily:"var(--sans)", fontSize:"0.8rem", cursor:"pointer", fontWeight:500 }}>
           🖨 PDF
         </button>
+        {/* ✉ 이메일 버튼
+            현재: mailto: 로 기본 메일 앱 열기
+            추후: 앱 내 직접 발송 (Firebase/SendGrid) 으로 교체 예정 */}
         <button onClick={sendEmail}
           style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:9,
             border:"1px solid #2E7BDB", background:"rgba(46,123,219,0.1)", color:"#2E7BDB",
             fontFamily:"var(--sans)", fontSize:"0.8rem", cursor:"pointer", fontWeight:600 }}>
-          ✉ E-Mail
+          ✉ E-Mail senden
         </button>
       </div>
 
