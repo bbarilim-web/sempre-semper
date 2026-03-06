@@ -431,7 +431,7 @@ const PROBE_RANK = { "Vorstellung":1, "Generalprobe":2, "Orchesterhauptprobe":3,
 
 const USERS = [
   { id:"u1", name:"임봉수 · Lim Bong-Su", role:"member", voice:"Bass", email:"lim.bongsu@semperoper.de",
-    dob:"1984-05-12", ensemble:"Opernchor", theater:"Sächsische Staatsoper Dresden", part:"Bass 1." },
+    ensemble:"Opernchor", theater:"Sächsische Staatsoper Dresden", part:"Bass 1." },
   { id:"u2", name:"Admin / Chorleitung", role:"admin", voice:"Alt", email:"admin@semperoper.de" },
 ];
 
@@ -1197,10 +1197,12 @@ function LoginScreen({ onLogin }) {
 //  REGISTRATION SCREEN — shown after first Google login
 // ═══════════════════════════════════════════════════════════════════════
 function RegistrationScreen({ googleUser, onSave, onLogout }) {
-  const [name, setName] = useState(googleUser.displayName || "");
-  const [part, setPart] = useState("");
-  const [err,  setErr]  = useState("");
-  const [saving, setSaving] = useState(false);
+  const [name, setName]       = useState(googleUser.displayName || "");
+  const [part, setPart]       = useState("");
+  const [err,  setErr]        = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const PART_GROUPS = [
     { label:"Sopran", parts:["Sop. 1.", "Sop. 2."] },
@@ -1212,6 +1214,7 @@ function RegistrationScreen({ googleUser, onSave, onLogout }) {
   const handleSave = async () => {
     if (!name.trim()) { setErr("Bitte Namen eingeben."); return; }
     if (!part)        { setErr("Bitte Stimmgruppe auswählen."); return; }
+    if (!consent)     { setErr("Bitte Datenschutzhinweis bestätigen."); return; }
     setSaving(true);
     try { await onSave(name.trim(), part); }
     catch(e) { console.error("Save error:", e); setErr("Fehler: " + e.message); setSaving(false); }
@@ -1265,11 +1268,65 @@ function RegistrationScreen({ googleUser, onSave, onLogout }) {
           </div>
         </div>
 
+        {/* ── Datenschutz Einwilligung ── */}
+        <div style={{ margin:"16px 0 4px", padding:"12px 14px",
+          background:"var(--s2)", borderRadius:10,
+          border:"1px solid var(--border)" }}>
+          <label style={{ display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer" }}>
+            <input type="checkbox" checked={consent} onChange={e=>{ setConsent(e.target.checked); setErr(""); }}
+              style={{ marginTop:2, flexShrink:0, width:16, height:16, accentColor:"var(--accent)", cursor:"pointer" }}/>
+            <span style={{ fontSize:"0.78rem", color:"var(--text2)", lineHeight:1.5 }}>
+              Ich habe den{" "}
+              <span onClick={e=>{ e.preventDefault(); setShowPrivacy(v=>!v); }}
+                style={{ color:"var(--accent)", textDecoration:"underline", cursor:"pointer" }}>
+                Datenschutzhinweis
+              </span>
+              {" "}gelesen und stimme der Verarbeitung meiner Daten (Name, E-Mail, Stimmgruppe)
+              zur Nutzung dieser App zu. Die Nutzung ist freiwillig.
+            </span>
+          </label>
+
+          {/* 펼치기/접기 개인정보 안내 */}
+          {showPrivacy && (
+            <div style={{ marginTop:10, padding:"10px 12px", background:"var(--s1)",
+              borderRadius:8, fontSize:"0.74rem", color:"var(--muted)", lineHeight:1.6,
+              border:"1px solid var(--border)" }}>
+              <strong style={{ color:"var(--text)", fontSize:"0.78rem" }}>Datenschutzhinweis</strong>
+              <br/><br/>
+              <strong>Welche Daten werden gespeichert?</strong><br/>
+              Name, E-Mail-Adresse und Stimmgruppe (z.B. Bass 1.)
+              — keine Geburtsdaten, keine Adressdaten.
+              <br/><br/>
+              <strong>Wo werden die Daten gespeichert?</strong><br/>
+              In Google Firebase (Firestore), EU-Region. Betreiber:
+              Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland.
+              <br/><br/>
+              <strong>Wer hat Zugriff?</strong><br/>
+              Nur eingeloggte Mitglieder des Staatsopernchors.
+              Admin-Nutzer haben erweiterten Lesezugriff zur Dienstplanerstellung.
+              <br/><br/>
+              <strong>PDF-Analyse (optional):</strong><br/>
+              Beim Hochladen eines PDFs wird der Inhalt zur Analyse an die
+              Anthropic API (USA) übertragen. Es werden keine personenbezogenen
+              Daten übermittelt — nur die Planstruktur (Datum, Zeit, Probentyp).
+              <br/><br/>
+              <strong>Rechte:</strong><br/>
+              Sie können jederzeit die Löschung Ihrer Daten verlangen.
+              Wenden Sie sich dazu an den App-Administrator.
+              <br/><br/>
+              <strong>Rechtsgrundlage:</strong><br/>
+              Art. 6 Abs. 1 lit. a DSGVO (Einwilligung). Die Nutzung dieser
+              App ist freiwillig und hat keinen Einfluss auf das Arbeitsverhältnis.
+            </div>
+          )}
+        </div>
+
         {err && <div style={{ fontSize:"0.78rem", color:"var(--accent)", marginBottom:8, textAlign:"center" }}>{err}</div>}
 
         <div style={{ display:"flex", gap:8, marginTop:8 }}>
           <button className="btn btn-ghost" style={{ flex:1 }} onClick={onLogout}>Abbrechen</button>
-          <button className="btn btn-gold" style={{ flex:2 }} onClick={handleSave} disabled={saving}>
+          <button className="btn btn-gold" style={{ flex:2 }} onClick={handleSave} disabled={saving || !consent}
+            style={{ flex:2, opacity: consent ? 1 : 0.5 }}>
             {saving ? "Wird gespeichert…" : "Weiter →"}
           </button>
         </div>
@@ -2214,6 +2271,9 @@ Jede Spalte = nur 1 Monat. Tageszahlen gelten NUR für den Spalten-Monat!`;
       }
     }
 
+    // ── DSGVO-Hinweis: PDF-Inhalt wird zur Analyse an Anthropic (USA) übertragen.
+    // Es werden keine personenbezogenen Daten übermittelt — nur Planstruktur.
+    // Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung bei Registrierung).
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -5123,6 +5183,38 @@ function EinstellungenView({ user, settings, saveSettings, onLogout, scheds }) {
           onMouseLeave={e => e.target.style.background="var(--s1)"}>
           Abmelden
         </button>
+
+        {/* ── Datenschutz & Disclaimer ── */}
+        <div style={{ marginTop:20, padding:"14px 16px",
+          background:"var(--s2)", borderRadius:12,
+          border:"1px solid var(--border)", fontSize:"0.74rem",
+          color:"var(--muted)", lineHeight:1.6 }}>
+          <div style={{ fontWeight:700, color:"var(--text)", fontSize:"0.78rem", marginBottom:8 }}>
+            ⚖ Datenschutz & Haftungsausschluss
+          </div>
+          <p style={{ margin:"0 0 8px" }}>
+            <strong>Haftungsausschluss:</strong> Diese App dient ausschließlich
+            als persönliches Informationswerkzeug. Alle Angaben sind ohne Gewähr.
+            Verbindlich sind ausschließlich die offiziellen Dienstpläne und
+            Aushänge der Sächsischen Staatsoper Dresden.
+          </p>
+          <p style={{ margin:"0 0 8px" }}>
+            <strong>Gespeicherte Daten:</strong> Name, E-Mail-Adresse,
+            Stimmgruppe. Keine Geburtsdaten. Speicherort: Google Firebase,
+            EU-Region.
+          </p>
+          <p style={{ margin:"0 0 8px" }}>
+            <strong>PDF-Analyse:</strong> Beim Hochladen eines PDFs wird
+            ausschließlich die Planstruktur (Datum, Zeit, Probentyp) an
+            Anthropic API übertragen. Keine personenbezogenen Daten.
+          </p>
+          <p style={{ margin:0 }}>
+            <strong>Datenlöschung:</strong> Bei Fragen oder Löschungsanfragen
+            wenden Sie sich an den Administrator.
+            Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO.
+          </p>
+        </div>
+
       </div>
     </div>
   );
