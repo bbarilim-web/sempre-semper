@@ -2,6 +2,68 @@ import { useState, useMemo } from "react";
 import { isVorstellung, matchesMyProductions, normalizeProduction, splitProductions, fmtDate, getStyle, MONTHS_DE, today, todayStr, timeAgo } from "./utils.js";
 import { EvCard } from "./EvCard.jsx";
 
+// ── 달력 셀용 약어 변환 ──────────────────────────────────────────────
+// 작품명/공연명을 달력 셀에 맞게 짧게 줄임 (최대 약 10~12자)
+function shortenTitle(title, production) {
+  const src = production || title || "";
+  // 1. 고정 약어 매핑 (자주 쓰이는 작품)
+  const ABBR = {
+    "carmen":                    "Carmen",
+    "parsifal":                  "Parsifal",
+    "aida":                      "Aida",
+    "la traviata":               "Traviata",
+    "traviata":                  "Traviata",
+    "die zauberflöte":           "Zauberflöte",
+    "zauberflöte":               "Zauberflöte",
+    "don giovanni":              "Don Giov.",
+    "le nozze di figaro":        "Le Nozze",
+    "elias":                     "Elias",
+    "lohengrin":                 "Lohengrin",
+    "tannhäuser":                "Tannhäuser",
+    "tristan und isolde":        "Tristan",
+    "die meistersinger von nürnberg": "Meistersinger",
+    "das rheingold":             "Rheingold",
+    "die walküre":               "Walküre",
+    "siegfried":                 "Siegfried",
+    "götterdämmerung":           "Götterd.",
+    "salome":                    "Salome",
+    "elektra":                   "Elektra",
+    "der rosenkavalier":         "Rosenkavalier",
+    "rosenkavalier":             "Rosenkavalier",
+    "ariadne auf naxos":         "Ariadne",
+    "der freischütz":            "Freischütz",
+    "freischütz":                "Freischütz",
+    "karmelitinnen":             "Karmelitinnen",
+    "ein florentiner hut":       "Flor. Hut",
+    "florentiner hut":           "Flor. Hut",
+    "la bohème":                 "La Bohème",
+    "madama butterfly":          "Butterfly",
+    "tosca":                     "Tosca",
+    "fidelio":                   "Fidelio",
+    "rigoletto":                 "Rigoletto",
+    "romeo":                     "Roméo",
+    "cavalleria rusticana / pagliacci": "Cav/Pag",
+  };
+  // 2. 숫자 Konzert/Sinfoniekonzert 패턴
+  // "9. Sinfoniekonzert" → "9. Sinf."
+  // "9. Konzert" → "9. Konz."
+  const konzertMatch = src.match(/^(\d+)\.\s*(Sinfonie)?konzert/i);
+  if (konzertMatch) return `${konzertMatch[1]}. Sinf.`;
+
+  const key = src.toLowerCase().trim();
+  if (ABBR[key]) return ABBR[key];
+
+  // 3. 15자 이하면 그대로
+  if (src.length <= 14) return src;
+
+  // 4. 부제 / 괄호 제거
+  const noSub = src.replace(/\s*[\(/\-].*$/, "").trim();
+  if (noSub.length <= 14) return noSub;
+
+  // 5. 그냥 12자 + …
+  return src.slice(0, 12) + "…";
+}
+
 function VorstellungView({ scheds, user }) {
   const [selMonth, setSelMonth] = useState(null); // "YYYY-MM"
   const [selDate, setSelDate]   = useState(null); // "YYYY-MM-DD"
@@ -122,19 +184,20 @@ function VorstellungView({ scheds, user }) {
               if (isSel) cls += " sel";
               return (
                 <div key={day} className={cls}
-                  onClick={() => evs.length ? setSelDate(isSel ? null : ds) : null}>
+                  onClick={() => evs.length ? setSelDate(isSel ? null : ds) : null}
+                  style={{ height:64, overflow:"hidden", boxSizing:"border-box" }}>
                   <div className="vs-cal-dn">{day}</div>
                   {evs.length > 0 && (
                     <div className="vs-cal-prods">
-                      {evs.map((e,i) => (
+                      {evs.slice(0,2).map((e,i) => (
                         <div key={i} className={`vs-cal-prod${e.eventType==="Generalprobe"&&!isVorstellung(e)?" gp":""}`}>
-                          {e.production || e.title}
+                          {shortenTitle(e.title, e.production)}
                         </div>
                       ))}
+                      {evs.length > 2 && (
+                        <div style={{ fontSize:"0.52rem", color:"var(--muted)", lineHeight:1 }}>+{evs.length-2}</div>
+                      )}
                     </div>
-                  )}
-                  {evs.length > 0 && (
-                    <div className="vs-cal-time">{evs[0].startTime} Uhr</div>
                   )}
                 </div>
               );
