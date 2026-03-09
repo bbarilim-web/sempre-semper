@@ -9,9 +9,15 @@ import {
   getDocs, writeBatch,
 } from "firebase/firestore";
 import {
-  signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, getRedirectResult,
+  signInWithEmailAndPassword, signOut, onAuthStateChanged,
 } from "firebase/auth";
 import { db, auth, provider } from "./firebase";
+
+// ── Demo-Konto ────────────────────────────────────────────────────────
+export const DEMO_UID   = "v8nkjZBjGbYHcLLh9YKUwxwfrgy2";
+const DEMO_EMAIL        = "demo@semperoper-chor.app";
+const DEMO_PASSWORD     = "Demo2026!";
 
 // ── Collections ──────────────────────────────────────────────────────
 const COL = {
@@ -62,13 +68,22 @@ export function useAuth() {
     }
   };
 
+  const loginWithDemo = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, DEMO_EMAIL, DEMO_PASSWORD);
+    } catch (e) {
+      console.error("Demo login error:", e.code, e.message);
+      throw e;
+    }
+  };
+
   const logout = () => signOut(auth);
 
   const saveProfile = async (uid, data) => {
     await setDoc(doc(db, COL.users, uid), data, { merge: true });
   };
 
-  return { authUser, profile, loginWithGoogle, logout, saveProfile };
+  return { authUser, profile, loginWithGoogle, loginWithDemo, logout, saveProfile };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -214,7 +229,7 @@ export function useAllSettings(uid, isAdmin) {
 //  COMBINED HOOK — useFirebase()
 // ═══════════════════════════════════════════════════════════════════════
 export function useFirebase() {
-  const { authUser, profile, loginWithGoogle, logout, saveProfile } = useAuth();
+  const { authUser, profile, loginWithGoogle, loginWithDemo, logout, saveProfile } = useAuth();
   const uid     = authUser?.uid ?? null;
   const isAdmin = profile?.role === "admin";
 
@@ -231,6 +246,7 @@ export function useFirebase() {
     profile,
     loading,
     loginWithGoogle,
+    loginWithDemo,
     logout,
     saveProfile,
     scheds,

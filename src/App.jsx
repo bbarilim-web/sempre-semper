@@ -183,6 +183,13 @@ body {
   font-family: var(--sans); font-size: 0.88rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
 }
 .google-btn:hover { background: var(--s3); border-color: var(--border2); }
+.demo-btn {
+  width: 100%; padding: 11px 16px; display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: transparent; border: 1px solid var(--border2); border-radius: 10px;
+  color: var(--muted); font-family: var(--sans); font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; margin-top: 8px;
+}
+.demo-btn:hover { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
 
 .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sh h2 { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
@@ -449,7 +456,7 @@ function useToast() {
   return { toasts, add };
 }
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, onDemoLogin }) {
   const [step, setStep]     = useState("main");   // main | register
   const [name, setName]     = useState("");
   const [part, setPart]     = useState("");
@@ -505,7 +512,12 @@ function LoginScreen({ onLogin }) {
             ✦ Neu registrieren
           </button>
 
-
+          <button className="demo-btn" onClick={onDemoLogin}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+            </svg>
+            Demo ansehen
+          </button>
         </>}
 
         {step === "register" && <>
@@ -726,6 +738,7 @@ export default function App() {
     user: authUser, profile,
     loading: authLoading,
     loginWithGoogle,
+    loginWithDemo,
     saveProfile,
     logout: fbLogout,
     scheds, saveScheds, deleteEvent,
@@ -764,7 +777,7 @@ export default function App() {
   if (!authUser) return (
     <>
       <style>{CSS}</style>
-      <LoginScreen onLogin={loginWithGoogle} />
+      <LoginScreen onLogin={loginWithGoogle} onDemoLogin={loginWithDemo} />
     </>
   );
 
@@ -788,6 +801,7 @@ export default function App() {
   );
 
   const isAdmin = user.role === "admin";
+  const isDemo  = authUser?.uid === "v8nkjZBjGbYHcLLh9YKUwxwfrgy2";
   const changedCount = scheds.filter(e => e._edited && Date.now() - e.updatedAt < 48 * 3600000).length;
 
 
@@ -886,8 +900,8 @@ export default function App() {
           {tab === "calendar"  && <CalView scheds={scheds} user={user} defaultView={settings.defaultView} settings={settings} />}
           {tab === "vorst"    && <VorstellungView scheds={scheds} user={user} />}
           {tab === "pinnwand" && <PinnwandView pinnwand={pinnwand} savePost={savePost} deletePost={deletePost} updatePost={updatePost} user={user} toast={toast} />}
-          {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} />}
-          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} />}
+          {tab === "einstellungen" && <EinstellungenView user={user} settings={settings} saveSettings={saveSettings} onLogout={logout} scheds={scheds} isDemo={isDemo} />}
+          {tab === "admin-panel" && isAdmin && <AdminView scheds={scheds} setScheds={saveScheds} deleteEvent={deleteEvent} notifs={notifs} setNotifs={saveNotifs} toast={toast} settings={settings} saveSettings={saveSettings} users={allUsers} allSettings={allSettings} isDemo={isDemo} />}
         </main>
 
         <nav className="bottomnav">

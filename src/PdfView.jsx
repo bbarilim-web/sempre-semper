@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { normalizeProduction, splitProductions, TYPE_MAP, PRODUCTION_ALIASES, isVorstellung, isChorfrei, fmtDate, bassRequired } from "./utils.js";
 
-function PdfView({ scheds, setScheds, deleteEvent, user, toast }) {
+function PdfView({ scheds, setScheds, deleteEvent, user, toast, isDemo }) {
   const [drag, setDrag]         = useState(false);
   const [parsing, setParsing]   = useState(false);
   const [parsed, setParsed]     = useState(null);
@@ -361,6 +361,15 @@ KP→"Konzertprobe", TE→"Toneinspielung", Bel→"Beleuchtungsprobe", cf→"Cho
           </div>
 
           {/* 분석 버튼 */}
+          {isDemo ? (
+            <div style={{ background:"var(--s2)", border:"1px solid var(--border2)",
+              borderRadius:10, padding:"14px 16px", textAlign:"center" }}>
+              <div style={{ fontSize:"1.2rem", marginBottom:8 }}>🔒</div>
+              <div style={{ fontSize:"0.84rem", color:"var(--muted)", fontWeight:500 }}>
+                Diese Funktion ist in der Demo-Version nicht verfügbar.
+              </div>
+            </div>
+          ) : (
           <button onClick={parsePdf}
             style={{ width:"100%", padding:"12px", borderRadius:10,
               background:"var(--accent)", border:"none", color:"#fff",
@@ -373,6 +382,7 @@ KP→"Konzertprobe", TE→"Toneinspielung", Bel→"Beleuchtungsprobe", cf→"Cho
               ? ` (S. ${pageFrom}–${pageTo})`
               : ""}
           </button>
+          )}
         </div>
       )}
 
