@@ -227,18 +227,112 @@ export function useAllSettings(uid, isAdmin) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  DEMO PROBEN — 가상 연습 일정 생성
+// ═══════════════════════════════════════════════════════════════════════
+function generateDemoProben() {
+  // 오늘 기준 앞으로 ~10주치 가상 연습 일정
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const proben = [];
+
+  const productions = [
+    "Carmen", "Die Zauberflöte", "Parsifal", "Aida", "La Traviata"
+  ];
+  const conductors = [
+    "Hoffmann/Kim", "Wagner/Müller", "Fischer", "Bauer/Schmidt"
+  ];
+  const locations = ["Chorsaal", "Probebühne", "Großer Saal"];
+  const targets = [
+    "Alle Eingeteilten",
+    "Bass 1., Bass 2.",
+    "Tenor 1., Tenor 2.",
+    "Sop. 1., Sop. 2., Alt. 1., Alt. 2.",
+    "Sop. 1., Alt. 1., Ten. 1., Bass 1.",
+  ];
+
+  const probeTypes = [
+    { eventType:"Musikalische Probe",    titleSuffix:"Durchlauf",           startTime:"10:00", type:"BP" },
+    { eventType:"Musikalische Probe",    titleSuffix:"Korrekturen",         startTime:"10:00", type:"BP" },
+    { eventType:"Orchesterprobe",        titleSuffix:"mit Orchester",       startTime:"11:00", type:"OHP" },
+    { eventType:"Bühnenprobe",           titleSuffix:"Bühnenprobe",         startTime:"14:00", type:"GP" },
+    { eventType:"Generalprobe",          titleSuffix:"Generalprobe",        startTime:"18:00", type:"GP" },
+    { eventType:"Klavierprobe",          titleSuffix:"Klavierprobe",        startTime:"10:00", type:"KP" },
+    { eventType:"Bühnen-Orchesterprobe", titleSuffix:"Bühnen-Orchesterprobe", startTime:"14:00", type:"BO" },
+  ];
+
+  // 결정적(deterministic) 가상 데이터 — 오늘 기준 70일
+  let seed = 42;
+  const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return Math.abs(seed) / 0x7fffffff; };
+
+  for (let i = 0; i < 70; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dow = d.getDay(); // 0=So, 6=Sa
+    if (dow === 0) continue; // 일요일 제외
+
+    // 평균 0.55 확률로 연습 있음
+    if (rand() > 0.55) continue;
+
+    const prod    = productions[Math.floor(rand() * productions.length)];
+    const pt      = probeTypes[Math.floor(rand() * probeTypes.length)];
+    const cond    = conductors[Math.floor(rand() * conductors.length)];
+    const loc     = locations[Math.floor(rand() * locations.length)];
+    const target  = targets[Math.floor(rand() * targets.length)];
+
+    const dateStr = d.toISOString().slice(0, 10);
+    proben.push({
+      id:          `demo_probe_${dateStr}_${i}`,
+      date:        dateStr,
+      title:       `${prod} – ${pt.titleSuffix}`,
+      production:  prod,
+      eventType:   pt.eventType,
+      sourceType:  "dienstplan",
+      startTime:   pt.startTime,
+      endTime:     "00:00",
+      conductor:   cond,
+      location:    loc,
+      targetGroup: target,
+      note:        "",
+      _edited:     false,
+      _import:     true,
+      _demo:       true,
+      updatedAt:   Date.now(),
+    });
+  }
+
+  return proben;
+}
+
+const DEMO_PROBEN = generateDemoProben();
+
+// ═══════════════════════════════════════════════════════════════════════
 //  COMBINED HOOK — useFirebase()
 // ═══════════════════════════════════════════════════════════════════════
 export function useFirebase() {
   const { authUser, profile, loginWithGoogle, loginWithDemo, logout, saveProfile } = useAuth();
   const uid     = authUser?.uid ?? null;
   const isAdmin = profile?.role === "admin";
+  const isDemo  = uid === DEMO_UID;
 
-  const { scheds, saveAllScheds, deleteEvent }        = useSchedules([], uid);
-  const { pinnwand, savePost, deletePost, updatePost } = usePinnwand([], uid);
-  const { settings, saveSettings }                    = useSettings(uid);
-  const { allUsers }                                  = useAllUsers(uid, isAdmin);
-  const { allSettings }                               = useAllSettings(uid, isAdmin);
+  const { scheds: rawScheds, saveAllScheds, deleteEvent } = useSchedules([], uid);
+  const { pinnwand, savePost, deletePost, updatePost }    = usePinnwand([], uid);
+  const { settings, saveSettings }                        = useSettings(uid);
+  const { allUsers }                                      = useAllUsers(uid, isAdmin);
+  const { allSettings }                                   = useAllSettings(uid, isAdmin);
+
+  // Demo: Vorstellungen그대로 + 가상 연습 일정 교체
+  const scheds = isDemo
+    ? [
+        ...rawScheds.filter(e => {
+          const et = (e.eventType || "").toLowerCase();
+          const tt = (e.title     || "").toLowerCase();
+          // Vorstellung / Gastspiel 만 유지
+          return et.includes("vorstellung") || tt.includes(" vs ") || e.sourceType === "vorstellung";
+        }),
+        ...DEMO_PROBEN,
+      ].sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+    : rawScheds;
 
   const loading = authUser === undefined || (authUser !== null && profile === undefined);
 
