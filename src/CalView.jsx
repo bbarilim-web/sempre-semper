@@ -13,7 +13,7 @@ import { EvCard } from "./EvCard.jsx";
 function CalView({ scheds, user, defaultView = "woche", settings }) {
   const now = new Date();
   const [viewMode, setViewMode] = useState(defaultView);
-  const [selDate, setSelDate]   = useState(todayStr);
+  const [selDate, setSelDate]   = useState(() => new Date().toISOString().slice(0,10));
   const [showAll, setShowAll]   = useState(false);
 
   const myProductions = settings?.myProductions;
@@ -118,7 +118,7 @@ function CalView({ scheds, user, defaultView = "woche", settings }) {
         </div>
         <div style={{ display:"flex", gap:4 }}>
           <button className="fc" onClick={() => navigate(-1)} style={{ padding:"5px 11px", borderRadius:8 }}>‹</button>
-          <button className="fc on" onClick={() => setSelDate(todayStr)} style={{ borderRadius:8, fontSize:"0.76rem" }}>Heute</button>
+          <button className="fc on" onClick={() => setSelDate(new Date().toISOString().slice(0,10))} style={{ borderRadius:8, fontSize:"0.76rem" }}>Heute</button>
           <button className="fc" onClick={() => navigate(1)} style={{ padding:"5px 11px", borderRadius:8 }}>›</button>
         </div>
       </div>
