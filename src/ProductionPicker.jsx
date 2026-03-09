@@ -20,8 +20,6 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
   const curSeason = getCurrentSeason();
   const [selSeason, setSelSeason] = useState(curSeason);
 
-  // Vorplanung에서 시즌별 작품 추출
-  // Vorstellung/GP 이벤트의 날짜로 시즌 판단
   const seasonProds = {};
   scheds.forEach(e => {
     if (!e.production || !e.date) return;
@@ -34,17 +32,13 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
     });
   });
 
-  // 전체 시즌 목록 (정렬)
   const allSeasons = Object.keys(seasonProds).sort();
 
-  // myProductions는 { "시즌": ["작품1", "작품2"] } 형태로 저장
-  // 하위호환: 기존 배열 형태면 currentSeason에 할당
   const raw = settings.myProductionsBySeason;
   const myProdsBySeason = (raw && typeof raw === 'object' && !Array.isArray(raw))
     ? raw
     : {};
 
-  // 현재 시즌의 선택된 작품
   const selProds = myProdsBySeason[selSeason] || [];
   const prodsInSeason = [...(seasonProds[selSeason] || new Set())].sort();
 
@@ -52,7 +46,6 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
     const cur = myProdsBySeason[selSeason] || [];
     const next = cur.includes(prod) ? cur.filter(p => p !== prod) : [...cur, prod];
     const updated = { ...myProdsBySeason, [selSeason]: next };
-    // 하위호환: myProductions = 현재시즌 + 다른시즌 통합 배열 (Spielplan 필터용)
     const allSelected = [...new Set(Object.values(updated).flat())];
     saveSettings({ ...settings, myProductionsBySeason: updated, myProductions: allSelected });
   };
@@ -65,7 +58,6 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
     saveSettings({ ...settings, myProductionsBySeason: updated, myProductions: allSelected });
   };
 
-  // Neu dazu 토글 (기존 호환)
   const toggleNeuDazu = (prod) => {
     const cur = settings.neuDazuProductions || [];
     const next = cur.includes(prod) ? cur.filter(p => p !== prod) : [...cur, prod];
@@ -85,9 +77,9 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
         </div>
       )}
 
-      {/* 시즌 탭 */}
       {allSeasons.length > 0 && (
         <>
+          {/* 시즌 탭 */}
           <div style={{ display:"flex", gap:4, marginBottom:14, flexWrap:"wrap" }}>
             {allSeasons.map(s => {
               const cnt = (myProdsBySeason[s] || []).length;
@@ -114,7 +106,7 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
             })}
           </div>
 
-          {/* 선택/해제 버튼 */}
+          {/* 전체 선택/해제 */}
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
             <button className="btn btn-ghost btn-sm" onClick={toggleAll}>
               {selProds.length === prodsInSeason.length ? "Alle abwählen" : "Alle wählen"}
@@ -124,12 +116,13 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
             </span>
           </div>
 
-          {/* 작품 목록 */}
           {prodsInSeason.length === 0 && (
             <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"8px 0" }}>
               Keine Produktionen für Spielzeit {selSeason} gefunden.
             </div>
           )}
+
+          {/* 작품 목록 */}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
             {prodsInSeason.map(prod => {
               const isSelected = selProds.includes(prod);
@@ -140,6 +133,7 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
                   border:`1px solid ${isSelected ? "rgba(232,23,58,0.3)" : "var(--border)"}`,
                   borderLeft:`3px solid ${isSelected ? "var(--accent)" : "var(--border2)"}`,
                   borderRadius:10, overflow:"hidden" }}>
+
                   {/* 참여 체크 */}
                   <button onClick={() => toggle(prod)}
                     style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
@@ -156,18 +150,28 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
                       {prod}
                     </span>
                   </button>
+
                   {/* Neu dazu 토글 */}
                   {isSelected && (
                     <button onClick={() => toggleNeuDazu(prod)}
-                      style={{ padding:"11px 14px", background:"transparent",
-                        borderLeft:"1px solid var(--border)", border:"none",
-                        cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center" }}>
+                      style={{ padding:"11px 14px",
+                        background: isNeuDazu ? "rgba(46,123,219,0.08)" : "transparent",
+                        borderLeft:"1px solid var(--border)",
+                        cursor:"pointer", flexShrink:0,
+                        display:"flex", alignItems:"center", gap:6,
+                        transition:"background 0.15s" }}>
                       <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
                         background: isNeuDazu ? "var(--blue)" : "var(--s3)",
                         border:`1px solid ${isNeuDazu ? "var(--blue)" : "var(--border2)"}`,
                         display:"flex", alignItems:"center", justifyContent:"center" }}>
                         {isNeuDazu && <span style={{ color:"white", fontSize:"0.6rem", fontWeight:700 }}>✓</span>}
                       </div>
+                      <span style={{ fontSize:"0.72rem",
+                        fontWeight: isNeuDazu ? 600 : 400,
+                        color: isNeuDazu ? "var(--blue)" : "var(--muted)",
+                        whiteSpace:"nowrap" }}>
+                        Neu dazu
+                      </span>
                     </button>
                   )}
                 </div>
