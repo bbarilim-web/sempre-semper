@@ -124,21 +124,19 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
             </span>
           </div>
 
-          {/* 컬럼 헤더 */}
-          {prodsInSeason.length > 0 && (
-            <div style={{ display:"flex", justifyContent:"flex-end",
-              paddingRight:14, marginBottom:4 }}>
-              <span style={{ fontSize:"0.68rem", fontWeight:700, color:"var(--muted)",
-                textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                Neu dazu
-              </span>
-            </div>
-          )}
-
           {/* 작품 목록 */}
           {prodsInSeason.length === 0 && (
             <div style={{ fontSize:"0.8rem", color:"var(--faint)", fontStyle:"italic", padding:"8px 0" }}>
               Keine Produktionen für Spielzeit {selSeason} gefunden.
+            </div>
+          )}
+          {prodsInSeason.length > 0 && (
+            <div style={{ display:"flex", justifyContent:"flex-end",
+              paddingRight:16, marginBottom:4 }}>
+              <span style={{ fontSize:"0.68rem", fontWeight:700, color:"var(--muted)",
+                textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                Neu dazu
+              </span>
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
@@ -172,7 +170,8 @@ function ProductionPicker({ settings, saveSettings, scheds }) {
                     <button onClick={() => toggleNeuDazu(prod)}
                       style={{ padding:"11px 14px",
                         background: isNeuDazu ? "rgba(46,123,219,0.08)" : "transparent",
-                        borderLeft:"1px solid var(--border)",
+                        border:"none", borderLeft:"1px solid var(--border)",
+                        outline:"none",
                         cursor:"pointer", flexShrink:0,
                         display:"flex", alignItems:"center", justifyContent:"center",
                         width:48, transition:"background 0.15s" }}>
