@@ -291,7 +291,7 @@ body {
 .vs-month-tab .tab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 5px; opacity: 0.8; }
 .vs-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
 .vs-cal-dow { font-size: 0.6rem; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-.vs-cal-cell { height: 64px; padding: 4px 5px; border-radius: 7px; background: var(--s1); border: 1px solid var(--border); overflow: hidden; box-sizing: border-box; }
+.vs-cal-cell { min-height: 52px; padding: 4px 5px; border-radius: 7px; background: var(--s1); border: 1px solid var(--border); }
 .vs-cal-cell.empty { background: transparent; border-color: transparent; }
 .vs-cal-cell.today { border-color: var(--accent) !important; }
 .vs-cal-cell.today .vs-cal-dn { color: var(--accent); font-weight: 700; }
@@ -890,6 +890,7 @@ export default function App() {
               await saveProfile("v8nkjZBjGbYHcLLh9YKUwxwfrgy2", {
                 name, part, voice,
                 role: "member",
+                department: "chor",
                 email: "demo@semperoper-chor.app",
                 createdAt: Date.now(),
               });
@@ -915,6 +916,7 @@ export default function App() {
           await saveProfile(authUser.uid, {
             name, part, voice,
             role: "member",
+            department: "chor",
             email: authUser.email,
             createdAt: Date.now(),
           });
