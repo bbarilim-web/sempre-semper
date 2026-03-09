@@ -70,6 +70,7 @@ export function useAuth() {
 
   const loginWithDemo = async () => {
     try {
+      if (auth.currentUser) await signOut(auth);
       await signInWithEmailAndPassword(auth, DEMO_EMAIL, DEMO_PASSWORD);
     } catch (e) {
       console.error("Demo login error:", e.code, e.message);
