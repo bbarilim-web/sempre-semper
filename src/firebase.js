@@ -1,21 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════════
 //  FIREBASE CONFIGURATION
 //  Sempre Semper — Staatsopernchor Dresden
+//  키는 .env 파일 / Vercel 환경변수에서 읽음 (코드에 직접 넣지 말 것)
 // ═══════════════════════════════════════════════════════════════════════
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA2PpILD3yv7ibZab3Hvbk4rJJC_YglYGk",
-  authDomain: "sempre-semper-1e528.firebaseapp.com",
-  projectId: "sempre-semper-1e528",
-  storageBucket: "sempre-semper-1e528.firebasestorage.app",
-  messagingSenderId: "920074308813",
-  appId: "1:920074308813:web:0f2f72f07f74f8dc5fad84",
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app      = initializeApp(firebaseConfig);
+const app         = initializeApp(firebaseConfig);
 export const db       = getFirestore(app);
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();

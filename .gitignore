@@ -5,3 +5,11 @@ dist/
 .env
 .DS_Store
 cd
+.env
+.env.local
+.env.production
+node_modules/
+dist/
+.DS_Store
+src/*.backup.*
+src/*-backup.*
