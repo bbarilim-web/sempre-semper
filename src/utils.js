@@ -1,8 +1,6 @@
 // utils.js — Sempre Semper
 // 공유 상수 및 순수 헬퍼 함수
 
-import { useFirebase } from "./useFirebase.js";
-
 // ═══════════════════════════════════════════════════════════════════════
 //  CONSTANTS & HELPERS
 // ═══════════════════════════════════════════════════════════════════════
@@ -124,7 +122,11 @@ const matchesMyProductions = (event, myProductions, knownProductions = [], neuDa
 
   // 이벤트의 production을 정규화
   const sortedKnown = [...knownProductions].sort((a, b) => b.length - a.length);
-  const rawProds = splitProductions(event.production, knownProductions);
+  // production 필드 + title 필드 둘 다 파싱해서 합침
+  // 예: production="Elias" 인데 title="Elias / La Traviata" 인 경우도 커버
+  const rawFromProd  = splitProductions(event.production, knownProductions);
+  const rawFromTitle = splitProductions(event.title || "", knownProductions);
+  const rawProds = [...new Set([...rawFromProd, ...rawFromTitle])];
   const prods = rawProds.map(p => normalizeProduction(p, sortedKnown));
 
   // myProductions도 정규화해서 비교
@@ -203,17 +205,21 @@ function isRelevantForUser(event, user) {
   if (hasDamen)  return isFemale;
   if (hasHerren) return isMale;
 
-  // 특정 Stimmgruppe 명시 (콤마 분리 지원: "Tenor, Alt")
+  // 특정 Stimmgruppe 명시 (콤마 분리 지원: "Tenor, Alt" 또는 "Sop. 1., Alt. 2." 약어 포함)
   const parts = g.split(/[,;]+/).map(s => s.trim());
+  // "sop." "sop. 1." 등 약어도 인식
+  const isSopran = (tok) => tok.includes("sopran") || tok.startsWith("sop");
+  const isAlt    = (tok) => tok.includes("alt");
+  const isTenor  = (tok) => tok.includes("tenor") || tok.startsWith("ten");
+  const isBass   = (tok) => tok.includes("bass");
   const voiceMatch = (tok) =>
-    (tok.includes("sopran")  && (voice === "sopran" || part.includes("sopran"))) ||
-    (tok.includes("alt")     && (voice === "alt"    || part.includes("alt"))) ||
-    (tok.includes("tenor")   && (voice === "tenor"  || part.includes("tenor"))) ||
-    (tok.includes("bass")    && (voice === "bass"   || part.includes("bass")));
+    (isSopran(tok) && (voice === "sopran" || part.includes("sopran") || part.startsWith("sop"))) ||
+    (isAlt(tok)    && (voice === "alt"    || part.includes("alt"))) ||
+    (isTenor(tok)  && (voice === "tenor"  || part.includes("tenor") || part.startsWith("ten"))) ||
+    (isBass(tok)   && (voice === "bass"   || part.includes("bass")));
 
   const hasVoiceKeyword = parts.some(tok =>
-    tok.includes("sopran") || tok.includes("alt") ||
-    tok.includes("tenor")  || tok.includes("bass")
+    isSopran(tok) || isAlt(tok) || isTenor(tok) || isBass(tok)
   );
   if (hasVoiceKeyword) return parts.some(voiceMatch);
 
