@@ -573,6 +573,100 @@ function LoginScreen({ onLogin, onDemoLogin }) {
 
 
 // ═══════════════════════════════════════════════════════════════════════
+//  DEMO SETUP SCREEN — Stimmgruppe für Demo-Session wählen
+// ═══════════════════════════════════════════════════════════════════════
+function DemoSetupScreen({ onStart, onCancel }) {
+  const [part, setPart] = useState("");
+  const [err,  setErr]  = useState("");
+
+  const PART_GROUPS = [
+    { label:"Sopran", parts:["Sop. 1.", "Sop. 2."] },
+    { label:"Alt",    parts:["Alt. 1.", "Alt. 2."] },
+    { label:"Tenor",  parts:["Ten. 1.", "Ten. 2."] },
+    { label:"Bass",   parts:["Bass 1.", "Bass 2."] },
+  ];
+
+  const DEMO_NAMES = {
+    "Sop. 1.": "Sophie Müller",
+    "Sop. 2.": "Anna Weber",
+    "Alt. 1.": "Maria Braun",
+    "Alt. 2.": "Laura Schmidt",
+    "Ten. 1.": "Thomas Fischer",
+    "Ten. 2.": "Jonas Wagner",
+    "Bass 1.": "Max Bauer",
+    "Bass 2.": "Felix Hoffmann",
+  };
+
+  const handleStart = () => {
+    if (!part) { setErr("Bitte Stimmgruppe auswählen."); return; }
+    onStart(DEMO_NAMES[part], part);
+  };
+
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="login-logo">
+          <svg className="login-building" viewBox="0 0 120 70" fill="none" width="70" height="41">
+            <path d="M4 66 L4 38 L16 38 L16 30 L28 30 L28 22 L40 22 L40 14 L60 10 L80 14 L80 22 L92 22 L92 30 L104 30 L104 38 L116 38 L116 66 Z" fill="#E8173A"/>
+            <rect x="20" y="42" width="12" height="14" rx="1" fill="rgba(0,0,0,0.22)"/>
+            <rect x="54" y="42" width="12" height="14" rx="1" fill="rgba(0,0,0,0.22)"/>
+            <rect x="88" y="42" width="12" height="14" rx="1" fill="rgba(0,0,0,0.22)"/>
+            <rect x="50" y="52" width="20" height="14" rx="1" fill="rgba(0,0,0,0.18)"/>
+          </svg>
+          <div>
+            <span className="sempre">Demo</span>
+            <span className="semper">Stimmgruppe</span>
+          </div>
+        </div>
+        <div className="login-subtitle" style={{ marginBottom:20 }}>
+          Als welche Stimmgruppe möchtest du die App testen?
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:16 }}>
+          {PART_GROUPS.map(grp => (
+            <div key={grp.label}>
+              <div style={{ fontSize:"0.68rem", fontWeight:700, color:"var(--muted)",
+                textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>
+                {grp.label}
+              </div>
+              {grp.parts.map(p => (
+                <button key={p} onClick={() => { setPart(p); setErr(""); }}
+                  style={{ width:"100%", marginBottom:4, padding:"9px 10px", border:"1px solid",
+                    borderColor: part===p ? "var(--accent)" : "var(--border)",
+                    borderRadius:8, cursor:"pointer", fontFamily:"var(--sans)",
+                    fontSize:"0.84rem", fontWeight: part===p ? 700 : 400,
+                    background: part===p ? "var(--accent-dim)" : "var(--s2)",
+                    color: part===p ? "var(--accent)" : "var(--text2)",
+                    transition:"all 0.15s", textAlign:"left" }}>
+                  {part===p ? "✓ " : ""}{p}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {part && (
+          <div style={{ marginBottom:14, padding:"10px 14px", background:"var(--s2)",
+            border:"1px solid var(--border)", borderRadius:8, fontSize:"0.8rem", color:"var(--muted)" }}>
+            Demo als <strong style={{ color:"var(--text)" }}>{DEMO_NAMES[part]}</strong> · {part}
+          </div>
+        )}
+
+        {err && <div style={{ fontSize:"0.78rem", color:"var(--accent)", marginBottom:8, textAlign:"center" }}>{err}</div>}
+
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn btn-ghost" style={{ flex:1 }} onClick={onCancel}>Abbrechen</button>
+          <button className="btn btn-gold" style={{ flex:2 }} onClick={handleStart}
+            disabled={!part}>
+            Demo starten →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  REGISTRATION SCREEN — shown after first Google login
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -750,6 +844,7 @@ export default function App() {
 
   const user = profile;
   const [notifs, setNotifs] = useState([]);
+  const [demoSetup, setDemoSetup] = useState(false); // Demo 설정 화면 표시 여부
   const saveNotifs = (d) => setNotifs(d);
 
   const savePost = (p) => { const next = [p, ...pinnwand.filter(x => x.id !== p.id)]; savePinnwand(next); };
@@ -777,7 +872,26 @@ export default function App() {
   if (!authUser) return (
     <>
       <style>{CSS}</style>
-      <LoginScreen onLogin={loginWithGoogle} onDemoLogin={loginWithDemo} />
+      {demoSetup
+        ? <DemoSetupScreen
+            onStart={async (name, part) => {
+              const voice = PART_VOICE[part];
+              await loginWithDemo();
+              await saveProfile("v8nkjZBjGbYHcLLh9YKUwxwfrgy2", {
+                name, part, voice,
+                role: "member",
+                email: "demo@semperoper-chor.app",
+                createdAt: Date.now(),
+              });
+              setDemoSetup(false);
+            }}
+            onCancel={() => setDemoSetup(false)}
+          />
+        : <LoginScreen
+            onLogin={loginWithGoogle}
+            onDemoLogin={() => setDemoSetup(true)}
+          />
+      }
     </>
   );
 
