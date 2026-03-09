@@ -652,6 +652,16 @@ function DemoSetupScreen({ onStart, onCancel }) {
           </div>
         )}
 
+        {/* 안내 배너 */}
+        <div style={{ marginBottom:16, padding:"12px 14px",
+          background:"rgba(201,168,76,0.08)", border:"1px solid rgba(201,168,76,0.3)",
+          borderRadius:10, fontSize:"0.78rem", color:"var(--gold)", lineHeight:1.6 }}>
+          <div style={{ fontWeight:700, marginBottom:4 }}>ℹ️ Hinweis zur Demo</div>
+          Vorstellungstermine entsprechen dem echten Spielplan der Semperoper Dresden.
+          Alle Proben sind <strong>fiktive Beispieldaten</strong> und dienen ausschließlich
+          zur Veranschaulichung der App-Funktionen.
+        </div>
+
         {err && <div style={{ fontSize:"0.78rem", color:"var(--accent)", marginBottom:8, textAlign:"center" }}>{err}</div>}
 
         <div style={{ display:"flex", gap:8 }}>
