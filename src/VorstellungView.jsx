@@ -1,72 +1,73 @@
-import { useState, useMemo } from "react";
-import { isVorstellung, matchesMyProductions, normalizeProduction, splitProductions, fmtDate, getStyle, MONTHS_DE, today, todayStr, timeAgo } from "./utils.js";
+import { useState } from "react";
+import { isVorstellung, fmtDate, MONTHS_DE, today, todayStr, timeAgo } from "./utils.js";
 import { EvCard } from "./EvCard.jsx";
 
 // ── 달력 셀용 약어 변환 ──────────────────────────────────────────────
-// 작품명/공연명을 달력 셀에 맞게 짧게 줄임 (최대 약 10~12자)
 function shortenTitle(title, production) {
   const src = production || title || "";
-  // 1. 고정 약어 매핑 (자주 쓰이는 작품)
   const ABBR = {
-    "carmen":                    "Carmen",
-    "parsifal":                  "Parsifal",
-    "aida":                      "Aida",
-    "la traviata":               "Traviata",
-    "traviata":                  "Traviata",
-    "die zauberflöte":           "Zauberflöte",
-    "zauberflöte":               "Zauberflöte",
-    "don giovanni":              "Don Giov.",
-    "le nozze di figaro":        "Le Nozze",
-    "elias":                     "Elias",
-    "lohengrin":                 "Lohengrin",
-    "tannhäuser":                "Tannhäuser",
-    "tristan und isolde":        "Tristan",
+    "carmen":                         "Carmen",
+    "parsifal":                       "Parsifal",
+    "aida":                           "Aida",
+    "la traviata":                    "Traviata",
+    "traviata":                       "Traviata",
+    "die zauberflöte":                "Zauberflöte",
+    "zauberflöte":                    "Zauberflöte",
+    "don giovanni":                   "Don Giov.",
+    "le nozze di figaro":             "Le Nozze",
+    "elias":                          "Elias",
+    "lohengrin":                      "Lohengrin",
+    "tannhäuser":                     "Tannhäuser",
+    "tristan und isolde":             "Tristan",
     "die meistersinger von nürnberg": "Meistersinger",
-    "das rheingold":             "Rheingold",
-    "die walküre":               "Walküre",
-    "siegfried":                 "Siegfried",
-    "götterdämmerung":           "Götterd.",
-    "salome":                    "Salome",
-    "elektra":                   "Elektra",
-    "der rosenkavalier":         "Rosenkavalier",
-    "rosenkavalier":             "Rosenkavalier",
-    "ariadne auf naxos":         "Ariadne",
-    "der freischütz":            "Freischütz",
-    "freischütz":                "Freischütz",
-    "karmelitinnen":             "Karmelitinnen",
-    "ein florentiner hut":       "Flor. Hut",
-    "florentiner hut":           "Flor. Hut",
-    "la bohème":                 "La Bohème",
-    "madama butterfly":          "Butterfly",
-    "tosca":                     "Tosca",
-    "fidelio":                   "Fidelio",
-    "rigoletto":                 "Rigoletto",
-    "romeo":                     "Roméo",
+    "das rheingold":                  "Rheingold",
+    "die walküre":                    "Walküre",
+    "siegfried":                      "Siegfried",
+    "götterdämmerung":                "Götterd.",
+    "salome":                         "Salome",
+    "elektra":                        "Elektra",
+    "der rosenkavalier":              "Rosenkavalier",
+    "rosenkavalier":                  "Rosenkavalier",
+    "ariadne auf naxos":              "Ariadne",
+    "der freischütz":                 "Freischütz",
+    "freischütz":                     "Freischütz",
+    "karmelitinnen":                  "Karmelitinnen",
+    "ein florentiner hut":            "Flor. Hut",
+    "florentiner hut":                "Flor. Hut",
+    "la bohème":                      "La Bohème",
+    "madama butterfly":               "Butterfly",
+    "tosca":                          "Tosca",
+    "fidelio":                        "Fidelio",
+    "rigoletto":                      "Rigoletto",
+    "romeo":                          "Roméo",
     "cavalleria rusticana / pagliacci": "Cav/Pag",
   };
-  // 2. 숫자 Konzert/Sinfoniekonzert 패턴
-  // "9. Sinfoniekonzert" → "9. Sinf."
-  // "9. Konzert" → "9. Konz."
+  // 숫자 Sinfoniekonzert/Konzert 패턴: "9. Sinfoniekonzert" → "9. Sinf."
   const konzertMatch = src.match(/^(\d+)\.\s*(Sinfonie)?konzert/i);
   if (konzertMatch) return `${konzertMatch[1]}. Sinf.`;
 
   const key = src.toLowerCase().trim();
   if (ABBR[key]) return ABBR[key];
-
-  // 3. 15자 이하면 그대로
   if (src.length <= 14) return src;
-
-  // 4. 부제 / 괄호 제거
-  const noSub = src.replace(/\s*[\(/\-].*$/, "").trim();
+  // 괄호/부제 제거
+  const noSub = src.replace(/\s*[\(\/\-].*$/, "").trim();
   if (noSub.length <= 14) return noSub;
-
-  // 5. 그냥 12자 + …
   return src.slice(0, 12) + "…";
 }
 
+// ── 날짜 → 시즌 레이블 ("2025-09-01" → "25/26") ────────────────────
+function dateToSeason(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const y = d.getFullYear();
+  const m = d.getMonth(); // 0-indexed
+  const startYear = m >= 7 ? y : y - 1; // 8월(7)부터 새 시즌
+  return `${String(startYear).slice(2)}/${String(startYear + 1).slice(2)}`;
+}
+
 function VorstellungView({ scheds, user }) {
-  const [selMonth, setSelMonth] = useState(null); // "YYYY-MM"
-  const [selDate, setSelDate]   = useState(null); // "YYYY-MM-DD"
+  const [selSeason, setSelSeason] = useState(null);
+  const [selMonth,  setSelMonth]  = useState(null);
+  const [selDate,   setSelDate]   = useState(null);
 
   // 중복 제거
   const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
@@ -81,28 +82,38 @@ function VorstellungView({ scheds, user }) {
       }, {})
   ).sort((a,b) => (a.date+(a.startTime||"")).localeCompare(b.date+(b.startTime||"")));
 
-  // 달별 그룹
+  // 시즌 목록 추출
+  const allSeasons = [...new Set(vorstellungen.map(e => dateToSeason(e.date)))].sort();
+  const curSeason  = dateToSeason(todayStr);
+  const activeSeason = selSeason || (allSeasons.includes(curSeason) ? curSeason : allSeasons[0]);
+
+  // 해당 시즌의 공연만 필터
+  const seasonVS = vorstellungen.filter(e => dateToSeason(e.date) === activeSeason);
+
+  // 달별 그룹 (해당 시즌만)
   const months = {};
-  vorstellungen.forEach(e => {
+  seasonVS.forEach(e => {
     const k = e.date.slice(0,7);
     if (!months[k]) months[k] = [];
     months[k].push(e);
   });
-  const allMonthKeys = Object.keys(months).sort();
+  const monthKeys = Object.keys(months).sort();
 
-  // 초기 selMonth = 현재 달 또는 첫 달
+  // 현재 달 또는 시즌 첫 달
   const curMk = todayStr.slice(0,7);
-  const activeMk = selMonth || (allMonthKeys.includes(curMk) ? curMk : allMonthKeys[0]);
+  const activeMk = selMonth && monthKeys.includes(selMonth)
+    ? selMonth
+    : (monthKeys.includes(curMk) ? curMk : monthKeys[0]);
 
-  // 다음 공연
+  // 다음 공연 (전체에서)
   const next = vorstellungen.find(e => e.date >= todayStr);
   const daysUntil = next ? Math.ceil((new Date(next.date+"T12:00:00") - today) / 86400000) : null;
 
-  // 선택된 달 달력 데이터
+  // 달력 데이터
   const calEvs = activeMk ? (months[activeMk] || []) : [];
   const [cy, cm] = activeMk ? activeMk.split("-").map(Number) : [0,0];
   const daysInMonth = activeMk ? new Date(cy, cm, 0).getDate() : 0;
-  const firstDow = activeMk ? (new Date(cy, cm-1, 1).getDay()+6)%7 : 0;
+  const firstDow    = activeMk ? (new Date(cy, cm-1, 1).getDay()+6)%7 : 0;
   const evsByDay = {};
   calEvs.forEach(e => {
     const d = parseInt(e.date.slice(8));
@@ -110,8 +121,14 @@ function VorstellungView({ scheds, user }) {
     evsByDay[d].push(e);
   });
 
-  // 선택된 날짜의 이벤트
   const selEvs = selDate ? (evsByDay[parseInt(selDate.slice(8))] || []) : [];
+
+  // 시즌 변경 시 월/날짜 초기화
+  const handleSeasonChange = (s) => {
+    setSelSeason(s);
+    setSelMonth(null);
+    setSelDate(null);
+  };
 
   return (
     <div className="page">
@@ -131,10 +148,34 @@ function VorstellungView({ scheds, user }) {
         </div>
       )}
 
+      {/* 시즌 탭 */}
+      {allSeasons.length > 1 && (
+        <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+          {allSeasons.map(s => {
+            const isAct = s === activeSeason;
+            const isCur = s === curSeason;
+            const cnt = vorstellungen.filter(e => dateToSeason(e.date) === s).length;
+            return (
+              <button key={s} onClick={() => handleSeasonChange(s)}
+                style={{ padding:"6px 14px", borderRadius:20, cursor:"pointer",
+                  fontFamily:"var(--sans)", fontSize:"0.78rem", transition:"all 0.15s",
+                  border:`1px solid ${isAct ? "var(--accent)" : "var(--border)"}`,
+                  background: isAct ? "var(--accent)" : "var(--s1)",
+                  color: isAct ? "#fff" : isCur ? "var(--accent)" : "var(--text2)",
+                  fontWeight: isAct ? 700 : isCur ? 600 : 400 }}>
+                {isCur && !isAct && <span style={{ marginRight:4 }}>●</span>}
+                Saison {s}
+                <span style={{ marginLeft:5, fontSize:"0.7em", opacity:0.8 }}>{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 월 탭 */}
-      {allMonthKeys.length > 0 && (
+      {monthKeys.length > 0 && (
         <div className="vs-month-tabs">
-          {allMonthKeys.map(mk => {
+          {monthKeys.map(mk => {
             const [y, m] = mk.split("-").map(Number);
             const hasToday = mk === curMk;
             const isAct = mk === activeMk;
@@ -175,12 +216,12 @@ function VorstellungView({ scheds, user }) {
               const evs = evsByDay[day] || [];
               const hasVS = evs.some(e => isVorstellung(e));
               const hasGP = evs.some(e => e.eventType === "Generalprobe");
-              const isT = ds === todayStr;
+              const isT   = ds === todayStr;
               const isSel = ds === selDate;
               let cls = "vs-cal-cell";
               if (hasVS) cls += " has-ev";
               else if (hasGP) cls += " has-gp";
-              if (isT) cls += " today";
+              if (isT)   cls += " today";
               if (isSel) cls += " sel";
               return (
                 <div key={day} className={cls}
@@ -296,9 +337,5 @@ function ChangesView({ scheds, notifs, user }) {
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-//  PDF VIEW  — Claude API parses Semperoper schedule formats
-// ═══════════════════════════════════════════════════════════════════════
 
 export { VorstellungView, ChangesView };
