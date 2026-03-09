@@ -1,16 +1,77 @@
-import { useState, useMemo } from "react";
-import { isVorstellung, matchesMyProductions, normalizeProduction, splitProductions, fmtDate, getStyle, MONTHS_DE, today, todayStr, timeAgo } from "./utils.js";
+import { useState } from "react";
+import { isVorstellung, fmtDate, MONTHS_DE, today, todayStr, timeAgo } from "./utils.js";
 import { EvCard } from "./EvCard.jsx";
 
-function VorstellungView({ scheds, user }) {
-  const [selMonth, setSelMonth] = useState(null); // "YYYY-MM"
-  const [selDate, setSelDate]   = useState(null); // "YYYY-MM-DD"
+// ── 달력 셀용 약어 변환 ──────────────────────────────────────────────
+function shortenTitle(title, production) {
+  const src = production || title || "";
+  const ABBR = {
+    "carmen":                         "Carmen",
+    "parsifal":                       "Parsifal",
+    "aida":                           "Aida",
+    "la traviata":                    "Traviata",
+    "traviata":                       "Traviata",
+    "die zauberflöte":                "Zauberflöte",
+    "zauberflöte":                    "Zauberflöte",
+    "don giovanni":                   "Don Giov.",
+    "le nozze di figaro":             "Le Nozze",
+    "elias":                          "Elias",
+    "lohengrin":                      "Lohengrin",
+    "tannhäuser":                     "Tannhäuser",
+    "tristan und isolde":             "Tristan",
+    "die meistersinger von nürnberg": "Meistersinger",
+    "das rheingold":                  "Rheingold",
+    "die walküre":                    "Walküre",
+    "siegfried":                      "Siegfried",
+    "götterdämmerung":                "Götterd.",
+    "salome":                         "Salome",
+    "elektra":                        "Elektra",
+    "der rosenkavalier":              "Rosenkavalier",
+    "rosenkavalier":                  "Rosenkavalier",
+    "ariadne auf naxos":              "Ariadne",
+    "der freischütz":                 "Freischütz",
+    "freischütz":                     "Freischütz",
+    "karmelitinnen":                  "Karmelitinnen",
+    "ein florentiner hut":            "Flor. Hut",
+    "florentiner hut":                "Flor. Hut",
+    "la bohème":                      "La Bohème",
+    "madama butterfly":               "Butterfly",
+    "tosca":                          "Tosca",
+    "fidelio":                        "Fidelio",
+    "rigoletto":                      "Rigoletto",
+    "romeo":                          "Roméo",
+    "cavalleria rusticana / pagliacci": "Cav/Pag",
+  };
+  // 숫자 Sinfoniekonzert/Konzert 패턴: "9. Sinfoniekonzert" → "9. Sinf."
+  const konzertMatch = src.match(/^(\d+)\.\s*(Sinfonie)?konzert/i);
+  if (konzertMatch) return `${konzertMatch[1]}. Sinf.`;
+  const key = src.toLowerCase().trim();
+  if (ABBR[key]) return ABBR[key];
+  if (src.length <= 14) return src;
+  const noSub = src.replace(/\s*[\(\/\-].*$/, "").trim();
+  if (noSub.length <= 14) return noSub;
+  return src.slice(0, 12) + "…";
+}
 
-  // 중복 제거
+// ── 날짜 → 시즌 레이블 ("2025-09-01" → "25/26") ────────────────────
+function dateToSeason(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const startYear = m >= 7 ? y : y - 1;
+  return `${String(startYear).slice(2)}/${String(startYear + 1).slice(2)}`;
+}
+
+function VorstellungView({ scheds, user }) {
+  const [selSeason, setSelSeason] = useState(null);
+  const [selMonth,  setSelMonth]  = useState(null);
+  const [selDate,   setSelDate]   = useState(null);
+
+  // Vorstellung만 (GP 제외)
   const SOURCE_PRIORITY = { tagesplan: 0, dienstplan: 1, monatsplan: 2, vorplanung: 3 };
   const vorstellungen = Object.values(
     scheds
-      .filter(e => isVorstellung(e) || e.eventType === "Generalprobe")
+      .filter(e => isVorstellung(e))
       .reduce((acc, e) => {
         const key = `${e.date}_${e.startTime}_${e.production || e.title}`;
         const ex = acc[key];
@@ -19,28 +80,37 @@ function VorstellungView({ scheds, user }) {
       }, {})
   ).sort((a,b) => (a.date+(a.startTime||"")).localeCompare(b.date+(b.startTime||"")));
 
+  // 시즌 목록
+  const allSeasons = [...new Set(vorstellungen.map(e => dateToSeason(e.date)))].sort();
+  const curSeason  = dateToSeason(todayStr);
+  const activeSeason = selSeason || (allSeasons.includes(curSeason) ? curSeason : allSeasons[0]);
+
+  // 해당 시즌 공연만
+  const seasonVS = vorstellungen.filter(e => dateToSeason(e.date) === activeSeason);
+
   // 달별 그룹
   const months = {};
-  vorstellungen.forEach(e => {
+  seasonVS.forEach(e => {
     const k = e.date.slice(0,7);
     if (!months[k]) months[k] = [];
     months[k].push(e);
   });
-  const allMonthKeys = Object.keys(months).sort();
+  const monthKeys = Object.keys(months).sort();
 
-  // 초기 selMonth = 현재 달 또는 첫 달
   const curMk = todayStr.slice(0,7);
-  const activeMk = selMonth || (allMonthKeys.includes(curMk) ? curMk : allMonthKeys[0]);
+  const activeMk = selMonth && monthKeys.includes(selMonth)
+    ? selMonth
+    : (monthKeys.includes(curMk) ? curMk : monthKeys[0]);
 
-  // 다음 공연
+  // 다음 공연 (전체)
   const next = vorstellungen.find(e => e.date >= todayStr);
   const daysUntil = next ? Math.ceil((new Date(next.date+"T12:00:00") - today) / 86400000) : null;
 
-  // 선택된 달 달력 데이터
+  // 달력 데이터
   const calEvs = activeMk ? (months[activeMk] || []) : [];
   const [cy, cm] = activeMk ? activeMk.split("-").map(Number) : [0,0];
   const daysInMonth = activeMk ? new Date(cy, cm, 0).getDate() : 0;
-  const firstDow = activeMk ? (new Date(cy, cm-1, 1).getDay()+6)%7 : 0;
+  const firstDow    = activeMk ? (new Date(cy, cm-1, 1).getDay()+6)%7 : 0;
   const evsByDay = {};
   calEvs.forEach(e => {
     const d = parseInt(e.date.slice(8));
@@ -48,8 +118,13 @@ function VorstellungView({ scheds, user }) {
     evsByDay[d].push(e);
   });
 
-  // 선택된 날짜의 이벤트
   const selEvs = selDate ? (evsByDay[parseInt(selDate.slice(8))] || []) : [];
+
+  const handleSeasonChange = (s) => {
+    setSelSeason(s);
+    setSelMonth(null);
+    setSelDate(null);
+  };
 
   return (
     <div className="page">
@@ -69,10 +144,34 @@ function VorstellungView({ scheds, user }) {
         </div>
       )}
 
+      {/* 시즌 탭 */}
+      {allSeasons.length > 1 && (
+        <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+          {allSeasons.map(s => {
+            const isAct = s === activeSeason;
+            const isCur = s === curSeason;
+            const cnt = vorstellungen.filter(e => dateToSeason(e.date) === s).length;
+            return (
+              <button key={s} onClick={() => handleSeasonChange(s)}
+                style={{ padding:"6px 14px", borderRadius:20, cursor:"pointer",
+                  fontFamily:"var(--sans)", fontSize:"0.78rem", transition:"all 0.15s",
+                  border:`1px solid ${isAct ? "var(--accent)" : "var(--border)"}`,
+                  background: isAct ? "var(--accent)" : "var(--s1)",
+                  color: isAct ? "#fff" : isCur ? "var(--accent)" : "var(--text2)",
+                  fontWeight: isAct ? 700 : isCur ? 600 : 400 }}>
+                {isCur && !isAct && <span style={{ marginRight:4 }}>●</span>}
+                Saison {s}
+                <span style={{ marginLeft:5, fontSize:"0.7em", opacity:0.8 }}>{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 월 탭 */}
-      {allMonthKeys.length > 0 && (
+      {monthKeys.length > 0 && (
         <div className="vs-month-tabs">
-          {allMonthKeys.map(mk => {
+          {monthKeys.map(mk => {
             const [y, m] = mk.split("-").map(Number);
             const hasToday = mk === curMk;
             const isAct = mk === activeMk;
@@ -111,30 +210,28 @@ function VorstellungView({ scheds, user }) {
             {Array.from({length: daysInMonth}, (_,i) => i+1).map(day => {
               const ds = `${cy}-${String(cm).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
               const evs = evsByDay[day] || [];
-              const hasVS = evs.some(e => isVorstellung(e));
-              const hasGP = evs.some(e => e.eventType === "Generalprobe");
-              const isT = ds === todayStr;
+              const isT   = ds === todayStr;
               const isSel = ds === selDate;
               let cls = "vs-cal-cell";
-              if (hasVS) cls += " has-ev";
-              else if (hasGP) cls += " has-gp";
-              if (isT) cls += " today";
+              if (evs.length > 0) cls += " has-ev";
+              if (isT)   cls += " today";
               if (isSel) cls += " sel";
               return (
                 <div key={day} className={cls}
-                  onClick={() => evs.length ? setSelDate(isSel ? null : ds) : null}>
+                  onClick={() => evs.length ? setSelDate(isSel ? null : ds) : null}
+                  style={{ height:64, overflow:"hidden", boxSizing:"border-box" }}>
                   <div className="vs-cal-dn">{day}</div>
                   {evs.length > 0 && (
                     <div className="vs-cal-prods">
-                      {evs.map((e,i) => (
-                        <div key={i} className={`vs-cal-prod${e.eventType==="Generalprobe"&&!isVorstellung(e)?" gp":""}`}>
-                          {e.production || e.title}
+                      {evs.slice(0,2).map((e,i) => (
+                        <div key={i} className="vs-cal-prod">
+                          {shortenTitle(e.title, e.production)}
                         </div>
                       ))}
+                      {evs.length > 2 && (
+                        <div style={{ fontSize:"0.52rem", color:"var(--muted)", lineHeight:1 }}>+{evs.length-2}</div>
+                      )}
                     </div>
-                  )}
-                  {evs.length > 0 && (
-                    <div className="vs-cal-time">{evs[0].startTime} Uhr</div>
                   )}
                 </div>
               );
@@ -154,19 +251,13 @@ function VorstellungView({ scheds, user }) {
               {selEvs.map((e,i) => (
                 <div key={i} className="vs-row">
                   <div className="vs-row-date">
-                    <div style={{ fontSize:"0.68rem", color:"var(--muted)" }}>
-                      {e.eventType==="Generalprobe" ? "GP" : "VS"}
-                    </div>
-                    <div style={{ fontSize:"1.1rem", fontWeight:700, color: e.eventType==="Generalprobe" ? "var(--orange)" : "var(--accent)", letterSpacing:"-0.02em" }}>
+                    <div style={{ fontSize:"0.68rem", color:"var(--muted)" }}>VS</div>
+                    <div style={{ fontSize:"1.1rem", fontWeight:700, color:"var(--accent)", letterSpacing:"-0.02em" }}>
                       {e.startTime?.slice(0,5)}
                     </div>
                   </div>
                   <div className="vs-row-title">
                     {e.title}
-                    {e.eventType==="Generalprobe" && (
-                      <span style={{ marginLeft:6, fontSize:"0.65rem", color:"var(--orange)", background:"var(--orange-bg)",
-                        border:"1px solid rgba(255,159,10,0.3)", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>GP</span>
-                    )}
                     {e.note && <div style={{ fontSize:"0.72rem", color:"var(--orange)", marginTop:2 }}>⚠ {e.note}</div>}
                     {e.conductor && <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>🎵 {e.conductor}</div>}
                     <div style={{ fontSize:"0.72rem", color:"var(--faint)", marginTop:2 }}>
@@ -233,9 +324,5 @@ function ChangesView({ scheds, notifs, user }) {
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-//  PDF VIEW  — Claude API parses Semperoper schedule formats
-// ═══════════════════════════════════════════════════════════════════════
 
 export { VorstellungView, ChangesView };
